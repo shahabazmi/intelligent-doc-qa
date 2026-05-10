@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+*.pyc
+uploads/
+milvus_demo.db
+.milvus_demo.db.lock
+app.db
+app.db-shm
+app.db-wal
+active_document.json
+.env
+.DS_Store
+.pytest_cache/
+.idea/
+.vscode/
+.claude/

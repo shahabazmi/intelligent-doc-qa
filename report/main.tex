@@ -1,0 +1,565 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Packages ----------------------------------------------------------------
+\usepackage[margin=1.85cm,top=1.85cm,bottom=2.0cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{listings}
+\usepackage{tikz}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage[numbers,sort&compress,square]{natbib}
+
+\usetikzlibrary{positioning,shapes.geometric,arrows.meta,calc,fit,backgrounds}
+
+% --- Hyperref colours --------------------------------------------------------
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  citecolor=blue!50!black,
+  urlcolor=blue!50!black,
+  pdftitle={Enterprise Doc AI: A Local-First Retrieval-Augmented Generation System},
+  pdfauthor={Shahab Azmi},
+}
+
+% --- Listings ---------------------------------------------------------------
+\definecolor{codebg}{RGB}{246,248,250}
+\definecolor{codecmt}{RGB}{106,115,125}
+\definecolor{codekw}{RGB}{215,58,73}
+\definecolor{codestr}{RGB}{32,113,69}
+
+\lstdefinestyle{py}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\footnotesize,
+  commentstyle=\color{codecmt}\itshape,
+  keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestr},
+  language=Python,
+  numbers=none,
+  breaklines=true,
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{black!18},
+  showstringspaces=false,
+  tabsize=2,
+  aboveskip=6pt,
+  belowskip=6pt,
+}
+
+% --- Caption styling ---------------------------------------------------------
+\captionsetup{font=small,labelfont=bf,format=plain,labelsep=period}
+\setlength{\parskip}{1pt}
+\setlength{\textfloatsep}{6pt plus 1pt minus 1pt}
+\setlength{\intextsep}{6pt plus 1pt minus 1pt}
+\setlength{\abovecaptionskip}{4pt}
+
+% --- Title -------------------------------------------------------------------
+\title{
+  \vspace{-1.0cm}
+  \textbf{Enterprise Doc AI}\\
+  \vspace{2pt}
+  \large A Local-First Retrieval-Augmented Generation System for\\Private Document Question Answering
+}
+\author{
+  Shahab Azmi\\
+  \small\texttt{asaadkhalil1@gmail.com}
+}
+\date{May 2026}
+
+\begin{document}
+\maketitle
+\vspace{-0.6cm}
+
+% =============================================================================
+\begin{abstract}
+\noindent
+Large language models (LLMs) provide fluent natural-language responses, yet they suffer from
+hallucination, knowledge cutoffs, and privacy concerns when applied to private documents.
+Cloud-hosted retrieval-augmented generation (RAG) services partially address hallucination but
+still require uploading sensitive content to third-party servers. We present
+\textit{Enterprise Doc AI}, a local-first RAG system that runs entirely on commodity laptop
+hardware (Apple~M2, 8\,GB RAM) without any cloud or paid-API dependencies. The system combines
+an embedded Milvus Lite vector store, a 33\,M-parameter bi-encoder for dense retrieval
+(\texttt{BAAI/bge-small-en-v1.5}), an Okapi BM25 lexical index, a hybrid reranker with
+domain-aware bonuses, and a 3-billion-parameter quantised generator
+(\texttt{llama3.2:3b} served by Ollama). A seven-class query classifier routes each request to a
+generative branch with type-specific prompt rules, an extractive branch that returns a verbatim
+chunk, or a metadata-only provenance branch -- bypassing LLM inference entirely when the answer
+is purely a lookup. We describe the ingestion pipeline, hybrid retrieval, conversation memory,
+persistence design, and the engineering trade-offs required to make a small quantised model
+behave reliably. The deployed system indexes a 660-chunk multi-document corpus and answers
+grounded queries in 5--15\,s end-to-end while never transmitting document content off-device.
+\end{abstract}
+
+% =============================================================================
+\section{Introduction}
+\label{sec:intro}
+
+The last two years have seen large language models~\cite{vaswani2017attention,touvron2023llama2}
+move from research curiosities into everyday productivity tools. For consumer use, hosted
+assistants such as ChatGPT and Claude are convenient. For \emph{enterprise} or \emph{personal}
+document question answering, however, three issues recur. First, cloud-hosted LLMs cannot be
+trusted with confidential material -- contracts, medical records, internal HR documents, exam
+papers -- whose loss would be material. Second, generic LLMs hallucinate when asked about facts
+outside their training data, and even retrieval-augmented chat services give the user no
+visibility into how the answer was constructed. Third, paid APIs are metered: every page indexed
+and every question asked has a unit cost that scales with usage, making them unsuitable for
+classroom or single-user research workflows.
+
+Retrieval-augmented generation (RAG)~\cite{lewis2020rag,gao2024ragsurvey} addresses hallucination
+by grounding the model's answer in retrieved passages from an authoritative corpus. The system
+described in this report -- \textit{Enterprise Doc AI} -- pushes the RAG idea to its
+local-first limit: the entire pipeline (parser, embedder, vector index, BM25 index, generator,
+and conversation store) runs on a single Apple~M2 laptop with 8\,GB of unified memory, no GPU,
+and no internet connection at query time. The 4\,GB of resident memory available after the
+operating system is sufficient because every component is deliberately small: a 33\,M-parameter
+bi-encoder, a Q4-quantised 3\,B-parameter generator, an embedded vector store, and a SQLite
+relational backbone for documents and conversations.
+
+The contributions of this work are:
+
+\begin{itemize}[leftmargin=18pt,topsep=2pt,itemsep=2pt]
+  \item A complete, runnable \textbf{local-first RAG pipeline} that integrates dense retrieval
+        (BGE\,\cite{xiao2024bge}), Okapi BM25\,\cite{robertson2009bm25}, and a small quantised
+        generator served by Ollama, with no cloud or paid-API dependency.
+  \item A \textbf{seven-class query classifier} (\textsc{extractive}, \textsc{provenance},
+        \textsc{numerical}, \textsc{list}, \textsc{reasoning}, \textsc{summary}, \textsc{factual})
+        that routes each query to a different prompt template, retrieval depth, and token
+        budget. Two of the seven classes \emph{bypass} LLM inference entirely.
+  \item A \textbf{hybrid reranker} combining normalised BM25 scores, normalised vector ranks,
+        and a small set of domain-aware bonuses (e.g.\ extra weight for parenthetical acronym
+        matches and for chunks containing email-shaped tokens), tuned to be useful on the small
+        document corpora typical of personal use.
+  \item A \textbf{table-aware chunker} that detects high-density numeric line patterns and
+        preserves their line breaks instead of collapsing whitespace, which is essential for
+        question answering over financial reports such as the 633-chunk Tesla 10-K used in our
+        test corpus.
+  \item A \textbf{persistence design} that stores documents and conversations in a single
+        SQLite database (with WAL mode for concurrency), and rebuilds the embedded vector store
+        from the canonical SQLite chunks on startup if the Milvus database file is missing.
+\end{itemize}
+
+The remainder of this report is organised as follows. Section~\ref{sec:related} discusses prior
+work. Section~\ref{sec:arch} presents the system architecture. Section~\ref{sec:impl} details
+the implementation of each component. Section~\ref{sec:eval} reports on a qualitative evaluation
+on a heterogeneous four-document corpus. Section~\ref{sec:disc} discusses limitations and future
+work, and Section~\ref{sec:concl} concludes.
+
+% =============================================================================
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Retrieval-augmented generation.}
+Lewis~et~al.~\cite{lewis2020rag} introduced the modern RAG formulation, jointly training a
+retriever and generator on knowledge-intensive QA tasks. Subsequent surveys~\cite{gao2024ragsurvey}
+catalogue dozens of variations -- pre-, post-, and iterative-retrieval; query rewriting;
+self-reflection (Self-RAG~\cite{asai2024selfrag}). Our system uses the simplest pre-retrieval
+variant but augments it with explicit query-type routing, which is rarely discussed in academic
+work but which we found essential for reliable behaviour with a small generator.
+
+\paragraph{Sparse and dense retrieval.}
+Okapi BM25~\cite{robertson2009bm25} remains the canonical sparse retrieval baseline -- term
+frequency and inverse document frequency with length normalisation. Dense retrieval, popularised
+by DPR~\cite{karpukhin2020dpr} and Sentence-BERT~\cite{reimers2019sbert}, embeds queries and
+documents into a shared vector space. The BGE family~\cite{xiao2024bge} we use is one of the
+strongest small open-source bi-encoders on the MTEB benchmark and runs at interactive speed
+on CPU. Hybrid sparse--dense retrieval is now standard practice; our weighted-rank-fusion
+variant is closest to the simple convex combination used in many production systems but adds
+domain bonuses that are tuned for personal-document (rather than web) corpora.
+
+\paragraph{Vector databases and ANN.}
+Milvus~\cite{wang2021milvus} is a purpose-built vector data management system. The \emph{Milvus
+Lite} variant we use is an embedded, file-backed build that requires no separate server -- ideal
+for single-machine deployment. Internally it uses HNSW~\cite{malkov2020hnsw} graphs for
+approximate nearest-neighbour search; we configure it with L2 distance and a similarity
+threshold of $1.2$, above which retrieved chunks are discarded as too weak.
+
+\paragraph{Local LLM serving.}
+\texttt{llama.cpp} and Ollama~\cite{ollama} have made it practical to run quantised
+LLaMA-family~\cite{touvron2023llama2} models on consumer hardware. We use Ollama as a
+managed local server for \texttt{llama3.2:3b} (Q4\_K\_M) -- a 3-billion-parameter model
+quantised to four-bit weights, occupying $\approx$2\,GB of disk and roughly the same in RAM
+during inference.
+
+% =============================================================================
+\section{System Architecture}
+\label{sec:arch}
+
+Enterprise Doc AI follows a three-tier design: a Streamlit single-page web client, a FastAPI
+service layer with seven cooperating modules, and a dual storage layer (SQLite for relational
+state plus Milvus Lite for vectors). Figure~\ref{fig:arch} sketches the data flow.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=4mm and 4mm,
+  every node/.style={font=\footnotesize,align=center},
+  block/.style={rectangle,draw=black!55,rounded corners=2pt,minimum width=22mm,
+                minimum height=8mm,inner sep=3pt,fill=blue!4},
+  store/.style={cylinder,shape border rotate=90,draw=black!55,minimum width=18mm,
+                minimum height=10mm,inner sep=2pt,aspect=0.4,fill=orange!10},
+  user/.style ={rectangle,rounded corners=2pt,draw=black!55,minimum width=22mm,
+                minimum height=7mm,fill=gray!10},
+  arr/.style ={-Stealth,thick,black!65},
+]
+% --- Top: client --------------------------------------------------------
+\node[user] (browser) {Browser};
+\node[block, right=8mm of browser] (st) {Streamlit UI\\(\texttt{frontend/app.py})};
+
+% --- Middle: API + services ---------------------------------------------
+\node[block, below=10mm of st] (api) {FastAPI app\\(\texttt{backend/main.py})};
+\node[block, below left=8mm and 0mm of api] (router) {Router\\\& Classifier};
+\node[block, below=8mm of api]              (retrieve) {Hybrid\\Retrieval};
+\node[block, below right=8mm and 0mm of api] (gen) {Generator\\(Ollama)};
+
+\node[block, left =12mm of router] (ingest) {Ingestion\\Parse + Chunk};
+
+% --- Stores -------------------------------------------------------------
+\node[store, below=12mm of retrieve] (sqlite) {SQLite\\\texttt{app.db}};
+\node[store, right=10mm of sqlite]   (milvus) {Milvus Lite\\HNSW + L2};
+\node[store, left =10mm of sqlite]   (uploads){\texttt{uploads/}\\filesystem};
+
+% --- Edges --------------------------------------------------------------
+\draw[arr] (browser.east) -- node[above]{HTTP} (st.west);
+\draw[arr] (st.south)     -- (api.north);
+
+\draw[arr] (api.west)      -| (router.north);
+\draw[arr] (api.south)     -- (retrieve.north);
+\draw[arr] (api.east)      -| (gen.north);
+
+\draw[arr] (router.south)  |- (retrieve.west);
+\draw[arr] (retrieve.east) -- (gen.west);
+
+\draw[arr] (ingest.east)   -- (router.west);
+
+\draw[arr] (retrieve.south) -- (sqlite.north);
+\draw[arr] (sqlite.east)    -- (milvus.west);
+\draw[arr] (ingest.south)   |- (uploads.west);
+
+\end{tikzpicture}
+\caption{High-level architecture. Solid arrows indicate data flow during \texttt{/upload} and
+\texttt{/query} requests. The vector store is rebuilt from canonical SQLite chunks on startup
+if its file is missing, which makes the SQLite database the single source of truth.}
+\label{fig:arch}
+\end{figure}
+
+\paragraph{Local-first principles.}
+Three rules guided the architecture: (i) the system must function fully offline once the LLM and
+embedding models are pulled; (ii) document content must never leave the device; (iii) state must
+survive process restarts without manual intervention. These rules motivated the choice of
+embedded vector store, the SQLite single-source-of-truth design, the SHA-256 deduplication on
+upload, and the auto-rebuild on startup.
+
+\paragraph{Process model.}
+The FastAPI \texttt{/query} endpoint is intentionally synchronous because both Milvus Lite and
+Ollama calls are blocking. Making the endpoint \texttt{async} would not parallelise these calls
+and would risk stalling the FastAPI event loop while the generator runs. A single
+\texttt{threading.Lock} serialises uploads and document deletions so concurrent calls cannot
+corrupt the vector store.
+
+% =============================================================================
+\section{Implementation}
+\label{sec:impl}
+
+This section walks through each pipeline stage. Throughout, file paths are given relative to
+the project root.
+
+\subsection{Document Ingestion and Chunking}
+\label{sec:impl-ingest}
+
+The parser at \texttt{backend/services/parser.py} dispatches by file extension. PDFs are read
+page-by-page with PyMuPDF; one element per page is emitted, preserving the page number for
+later citation. DOCX files use \texttt{python-docx} and emit one element per paragraph, plus one
+element per table row joined by \verb|" | "| -- this preserves cell structure for retrieval.
+Plain text becomes a single element. Images go through \texttt{unstructured.partition.auto},
+which transparently runs OCR.
+
+Elements are then grouped by page and passed to a \texttt{RecursiveCharacterTextSplitter} with
+\texttt{chunk\_size}~$=500$ and \texttt{chunk\_overlap}~$=100$ characters. The splitter
+prefers paragraph boundaries first, falling back to single newlines, then to sentence
+boundaries, and finally to word boundaries. Each chunk inherits the source page's metadata: file
+name, page number, document UUID, and a heuristic \emph{section} label.
+
+\paragraph{Section detection.} We scan the first six non-trivial lines of each page text block
+and classify a heading as the first match of: an all-uppercase line of length~$\geq 4$; a numbered
+heading (e.g.\ \texttt{1.1.}, \texttt{Chapter 3}, \texttt{II.}); or a short title-case line with
+no inline punctuation. The detected section becomes part of the citation displayed to the user.
+
+\paragraph{Table-aware normalisation.}
+Naive whitespace collapsing destroys tables: rows and columns merge into a single line. We
+detect this case heuristically -- if at least three lines exist and more than 40\,\% of them are
+short (under 80 chars) and contain a digit, we keep the line breaks and only collapse intra-line
+whitespace:
+
+\begin{lstlisting}[style=py]
+def _normalize_chunk_text(text):
+    lines = [l for l in text.split("\n") if l.strip()]
+    numeric_short = sum(1 for l in lines
+                        if len(l.strip()) < 80 and any(c.isdigit() for c in l))
+    if len(lines) >= 3 and numeric_short / len(lines) > 0.4:
+        return "\n".join(" ".join(l.split()) for l in lines)   # table mode
+    return " ".join(text.split())                              # prose mode
+\end{lstlisting}
+
+This heuristic was added after observing that \emph{Tesla, Inc.\ Form 10-K} pages -- which contain
+many financial tables -- were producing essentially unreadable single-line chunks before
+normalisation, severely hurting both BM25 and vector retrieval scores.
+
+\paragraph{Embedding and indexing.}
+Chunks are embedded with \texttt{BAAI/bge-small-en-v1.5} (384 dims, $\approx 33$\,M parameters)
+and inserted into Milvus Lite, which writes to a single file
+\texttt{milvus\_demo.db}. The same chunks are mirrored into a SQLite \texttt{chunks} table whose
+metadata is JSON-serialised; on startup we check whether the Milvus file exists and, if not, we
+rebuild it from SQLite. A SHA-256 hash of the upload short-circuits re-ingestion of identical
+files.
+
+\subsection{Hybrid Retrieval}
+\label{sec:impl-retrieval}
+
+Given a query, retrieval (\texttt{backend/services/retrieval.py}) proceeds in four steps.
+
+\noindent\textbf{(1) Stop-word removal and alias expansion.}
+A 50-word stop-list covers articles, common verbs, and document-meta words such as
+\texttt{pdf}, \texttt{document}, \texttt{paper}, \texttt{report}. A small alias map then expands
+\texttt{professor} to \{\texttt{professor}, \texttt{prof}, \texttt{instructor}, \texttt{lecturer},
+\texttt{teacher}\}, \texttt{email} to \{\texttt{email}, \texttt{mail}, \texttt{contact}\}, and so
+on -- a manual remedy for the well-known limitation of small bi-encoders on rare role nouns.
+
+\noindent\textbf{(2) BM25 candidate set.}
+\texttt{rank-bm25}'s \texttt{BM25Okapi} is built over the tokens of all loaded chunks. The top
+$\max(3k, 12)$ chunks by BM25 score form the lexical candidate pool.
+
+\noindent\textbf{(3) Vector candidate set.}
+A similarity search retrieves up to $\max(4k, 16)$ chunks from Milvus, after which any
+candidate with L2~distance $> 1.2$ is discarded. The threshold is tuned conservatively -- a
+weak vector match contributes nothing useful and risks displacing a strong BM25 match during
+fusion.
+
+\noindent\textbf{(4) Rerank.}
+Both pools are unioned and reranked by the convex combination
+\[
+\textrm{score}(d) \;=\; w_b \cdot \widehat{b}(d) \;+\; (1-w_b) \cdot \widehat{r}(d) \;+\; \beta(q,d),
+\]
+where $\widehat{b}$ is the min--max-normalised BM25 score, $\widehat{r}$ is the
+normalised inverse vector rank, and $\beta$ is a domain-aware bonus. The default
+weight $w_b = 0.5$ is increased to $0.7$ for numerical queries (where exact term match
+matters more than semantic similarity). Bonuses are small ($+0.10$ to $+0.18$) and target
+specific cases: page~1 chunks for instructor queries; chunks containing \texttt{@} or
+\texttt{email} for contact queries; parenthetical occurrences such as
+\verb|"natural language processing (NLP)"| for short-acronym queries; and chunks with
+\texttt{course description}, \texttt{course outcomes}, or \texttt{weekly schedule} for
+summary queries.
+
+\subsection{Query Classification}
+\label{sec:impl-classifier}
+
+Before retrieval runs, the user's query is classified into one of seven types
+(Table~\ref{tab:qtypes}). Classification is rule-based: the lower-cased query is checked
+against frozen sets of trigger phrases in priority order. The class then yields a
+\texttt{QueryConfig} dataclass that tells downstream stages how many chunks to retrieve, how to
+weight BM25 vs.\ dense scores, and how many tokens the LLM may emit.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Query types, retrieval parameters, and routing.}
+\label{tab:qtypes}
+\begin{tabularx}{\linewidth}{@{}lccccX@{}}
+\toprule
+Type & $k$ & $w_b$ & $n_{\textrm{predict}}$ & LLM? & Trigger examples \\
+\midrule
+\textsc{extractive} & 7 & 0.5 & 250 & no  & ``exact paragraph'', ``verbatim'', ``quote from'' \\
+\textsc{provenance} & 3 & 0.5 & 60  & no  & ``which page'', ``what section'', ``where in'' \\
+\textsc{numerical}  & 5 & 0.7 & 60  & yes & ``how many'', ``percentage'', ``what year'' \\
+\textsc{list}       & 5 & 0.6 & 150 & yes & ``list all'', ``name all'', ``enumerate'' \\
+\textsc{reasoning}  & 5 & 0.4 & 120 & yes & ``why does'', ``what are the risks'', ``analyse'' \\
+\textsc{summary}    & 6 & 0.5 & 300 & yes & ``summarise'', ``overview of'', ``key points'' \\
+\textsc{factual}    & 3 & 0.5 & 120 & yes & default \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The two ``no LLM'' rows are deliberate: an \textsc{extractive} query simply returns the highest-
+ranked chunk verbatim with a citation block; a \textsc{provenance} query returns only
+\texttt{Source}/\texttt{Page}/\texttt{Section} lines drawn from chunk metadata. Skipping the
+generator removes 5--10\,s of latency and eliminates the small but non-zero risk of a 3\,B model
+paraphrasing a quote that the user explicitly asked for verbatim.
+
+\subsection{Generation and Prompt Engineering}
+\label{sec:impl-gen}
+
+For the five generative classes, we issue a single Ollama call with
+\texttt{temperature}~$=0$ and \texttt{num\_predict} set per
+Table~\ref{tab:qtypes}. The prompt has a fixed five-rule core plus a
+type-specific addendum. The five rules instruct the model to: use only the retrieved context,
+reply ``Not found in document.'' when the context is silent, stop after one answer, prefer exact
+wording, and respect a 3--4-sentence ceiling unless explicitly asked otherwise. Type addenda
+add behaviour we found the 3\,B model would otherwise violate -- e.g.\ for \textsc{reasoning},
+an explicit list of forbidden hedge phrases (``could lead to'', ``analysts believe'', ``market
+trends suggest'') that the model would gladly invent if not blocked.
+
+The retrieved context is concatenated with a 3000-character cap. We empirically found that
+filling the model's full $\approx 4$\,k token context window with chunks degraded answer quality
+on the 3\,B model -- a longer context was a worse context, not a better one, presumably
+because the model's effective attention budget is small. Each block is prefixed with a
+bracketed source/page/section header so the generator can ground citations.
+
+\subsection{Conversation Memory}
+\label{sec:impl-conv}
+
+Conversations and per-turn messages live in two SQLite tables linked by foreign key with
+\texttt{ON DELETE CASCADE}. \texttt{recent\_turns(n=6)} returns the last six rows, which the
+generator formats as alternating \verb|[User]|/\verb|[AI]| lines under a header that explicitly
+warns the model not to copy the prior style. We cap turns at three (so six messages) because
+extra history did not measurably improve coherence on our test queries but did inflate prompt
+size noticeably. Conversations persist across server restarts and are listed in the sidebar.
+
+% =============================================================================
+\section{Evaluation}
+\label{sec:eval}
+
+We evaluate qualitatively on a four-document corpus exercised through the production UI. The
+documents and their chunk counts are given in Table~\ref{tab:corpus}.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Test corpus indexed during the demonstration session.}
+\label{tab:corpus}
+\begin{tabularx}{0.8\linewidth}{@{}Xrr@{}}
+\toprule
+Document & Format & Chunks \\
+\midrule
+\textit{Tesla, Inc.\ Form 10-K (FY2024)}  & PDF  & 633 \\
+\textit{NLP Course Syllabus (HSE)}        & PDF  & 16 \\
+\textit{AI Homework 1}                     & PDF  & 7 \\
+\textit{Resume (extended)}                 & DOCX & 4 \\
+\midrule
+\textbf{Total}                             &      & \textbf{660} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Hardware.} Apple~M2 with 8\,GB of unified memory; no discrete GPU. Ollama uses
+Apple's Metal backend; the embedding model runs on the same backend through
+\texttt{sentence-transformers}.
+
+\paragraph{Latencies (informal).}
+Document upload and indexing of the 633-chunk financial PDF takes $\approx 22$\,s end-to-end
+(parsing, embedding, vector insertion, SQLite mirroring). Subsequent queries take $5$--$8$\,s
+for short factual answers, climbing to $12$--$18$\,s for summaries with longer
+\texttt{num\_predict}. The first query after a cold start additionally pays a one-time
+$\approx 3$\,s model-load tax inside Ollama.
+
+\paragraph{Walk-through.}
+Figure~\ref{fig:ui-empty} shows the UI in its empty state. Indexed documents are visible from
+the paperclip badge (\verb|"4 indexed"|), and the conversation history is preserved across
+sessions in the left sidebar.
+
+\begin{figure}[t!]
+\centering
+\includegraphics[width=0.78\linewidth,height=5.4cm,keepaspectratio]{figures/01_main_ui.png}
+\caption{The Streamlit UI on a fresh load. The sidebar lists prior conversations recovered from
+SQLite; the centre panel shows the empty welcome state. Four documents are already indexed.}
+\label{fig:ui-empty}
+\end{figure}
+
+Figure~\ref{fig:ui-cited} shows the response to the question
+\verb|"Who is the instructor of the NLP course?"|. The hybrid retriever surfaces three chunks --
+the top one from \texttt{NLP\_course.pdf} page~1, plus two cross-document chunks for
+context. The generator returns the exact four-word answer
+``Assoc.~Prof.\ Soroosh Shalileh'', and the UI renders the source citations underneath. The
++0.10 page-1 bonus and the +0.18 parenthetical-acronym bonus (acting on the literal string
+``Natural Language Processing (NLP)'' in the chunk) both contribute to ranking the syllabus
+chunk above the much larger Tesla 10-K corpus despite the latter's higher chunk count.
+
+\begin{figure}[t!]
+\centering
+\includegraphics[width=0.82\linewidth,height=5.6cm,keepaspectratio]{figures/02_query_with_citations.png}
+\caption{Grounded answer to a \textsc{factual} document query. The four-word answer is followed
+by three source citations rendered from chunk metadata (file, page, snippet).}
+\label{fig:ui-cited}
+\end{figure}
+
+Figure~\ref{fig:ui-multi} shows a multi-turn session where a follow-up financial query is
+deliberately routed away from the document corpus. The router classified the question as a
+live-data query and the general-chat branch responded honestly that its training data ends
+in December~2023 -- demonstrating that the system fails closed: when retrieval is not used, the
+LLM is allowed to admit ignorance rather than guess.
+
+\begin{figure}[t!]
+\centering
+\includegraphics[width=0.82\linewidth,height=6.4cm,keepaspectratio]{figures/03_multi_turn_chat.png}
+\caption{Multi-turn conversation. Turn~1 is grounded against documents; turn~2 is routed to the
+general-chat branch and the model openly states its knowledge limit instead of hallucinating a
+revenue figure.}
+\label{fig:ui-multi}
+\end{figure}
+
+The upload pipeline (not pictured) supports multi-file selection of PDF, DOCX, TXT, PNG, and JPG
+content; SHA-256 deduplication on the backend means an identical file re-uploaded is detected
+and short-circuits within a few milliseconds, before any parsing or embedding work occurs.
+
+% =============================================================================
+\section{Discussion and Future Work}
+\label{sec:disc}
+
+\paragraph{Limitations.}
+The most important limitation is the generator. \texttt{llama3.2:3b} at four-bit quantisation is
+roughly the smallest model that produces fluent English answers, and it occasionally drops a
+correct retrieved fact in favour of a near-paraphrase. We work around this with strict prompt
+rules (Section~\ref{sec:impl-gen}) and the LLM-bypass branches for extractive and provenance
+queries, but a step up to a 7\,B--13\,B model would noticeably raise the answer-quality
+ceiling. The cross-encoder rerank step common in production RAG~\cite{gao2024ragsurvey} is
+absent: our hybrid lexical/dense fusion plus domain bonuses approximates it cheaply but is
+weaker than a true cross-encoder. The router that decides between document retrieval and
+general chat is rule-based; queries about \emph{indexed} corporate documents that look superficially
+like ``ask the world'' questions can be misrouted (visible in Figure~\ref{fig:ui-multi}).
+
+\paragraph{Future work.}
+\begin{enumerate}[leftmargin=18pt,topsep=2pt,itemsep=1pt]
+  \item \textbf{Cross-encoder rerank.} Adding \texttt{BAAI/bge-reranker-base} as a second-stage
+        reranker over the top~20 hybrid candidates would likely deliver the largest single
+        retrieval-quality lift.
+  \item \textbf{Streaming responses.} Piping Ollama's token-stream API through FastAPI
+        server-sent events into the Streamlit chat would change perceived latency from
+        ``5--15\,s wait'' to ``immediate first token''.
+  \item \textbf{PDF region linking.} Extending citation metadata with PyMuPDF text-rectangle
+        coordinates would let the UI link a citation back to the source page region.
+  \item \textbf{Adaptive routing.} Replacing the rule-based document/chat router with a learned
+        classifier would address the misrouting case in Figure~\ref{fig:ui-multi}.
+  \item \textbf{Per-conversation document scoping.} The retrieval layer already supports
+        filtering by \texttt{doc\_id}; a ``search in'' multi-select in the UI would let users
+        restrict a conversation to a specific document.
+  \item \textbf{Multi-language embeddings.} Swapping the embedding model for the
+        \texttt{bge-m3} multilingual variant would extend the system to non-English documents
+        with no other code changes.
+\end{enumerate}
+
+% =============================================================================
+\section{Conclusion}
+\label{sec:concl}
+
+We have presented Enterprise Doc AI, a fully local retrieval-augmented generation system that
+runs on commodity laptop hardware. By combining a small bi-encoder, a classical BM25 index, a
+rule-based query classifier, and a quantised generator served by Ollama, the system delivers
+grounded document QA with source citations, conversation memory, and multi-document support
+without sending any content off-device. The engineering value of the work lies less in any
+single component than in their integration: type-aware routing, LLM-bypass for the cheapest
+question types, table-aware chunking, and a SQLite-as-source-of-truth design that lets the
+embedded vector store be safely dropped and rebuilt. The result is a system that a single user
+can run, understand, and extend on their own hardware -- the local-first counterpart to
+hosted RAG products.
+
+% --- Bibliography -----------------------------------------------------------
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}

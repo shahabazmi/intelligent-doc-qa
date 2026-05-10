@@ -1,0 +1,103 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand*\HyPL@Entry[1]{}
+\citation{vaswani2017attention,touvron2023llama2}
+\citation{lewis2020rag,gao2024ragsurvey}
+\citation{xiao2024bge}
+\citation{robertson2009bm25}
+\HyPL@Entry{0<</S/D>>}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:intro}{{1}{1}{Introduction}{section.1}{}}
+\citation{lewis2020rag}
+\citation{gao2024ragsurvey}
+\citation{asai2024selfrag}
+\citation{robertson2009bm25}
+\citation{karpukhin2020dpr}
+\citation{reimers2019sbert}
+\citation{xiao2024bge}
+\citation{wang2021milvus}
+\citation{malkov2020hnsw}
+\citation{ollama}
+\citation{touvron2023llama2}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
+\newlabel{sec:related}{{2}{2}{Related Work}{section.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Retrieval-augmented generation.}{2}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Sparse and dense retrieval.}{2}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Vector databases and ANN.}{2}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Local LLM serving.}{2}{section*.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces High-level architecture. Solid arrows indicate data flow during \texttt  {/upload} and \texttt  {/query} requests. The vector store is rebuilt from canonical SQLite chunks on startup if its file is missing, which makes the SQLite database the single source of truth.\relax }}{3}{figure.caption.5}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:arch}{{1}{3}{High-level architecture. Solid arrows indicate data flow during \texttt {/upload} and \texttt {/query} requests. The vector store is rebuilt from canonical SQLite chunks on startup if its file is missing, which makes the SQLite database the single source of truth.\relax }{figure.caption.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}System Architecture}{3}{section.3}\protected@file@percent }
+\newlabel{sec:arch}{{3}{3}{System Architecture}{section.3}{}}
+\@writefile{toc}{\contentsline {paragraph}{Local-first principles.}{3}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Process model.}{3}{section*.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Implementation}{3}{section.4}\protected@file@percent }
+\newlabel{sec:impl}{{4}{3}{Implementation}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Document Ingestion and Chunking}{3}{subsection.4.1}\protected@file@percent }
+\newlabel{sec:impl-ingest}{{4.1}{3}{Document Ingestion and Chunking}{subsection.4.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{Section detection.}{4}{section*.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Table-aware normalisation.}{4}{section*.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Embedding and indexing.}{4}{section*.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Hybrid Retrieval}{4}{subsection.4.2}\protected@file@percent }
+\newlabel{sec:impl-retrieval}{{4.2}{4}{Hybrid Retrieval}{subsection.4.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Query types, retrieval parameters, and routing.\relax }}{5}{table.caption.11}\protected@file@percent }
+\newlabel{tab:qtypes}{{1}{5}{Query types, retrieval parameters, and routing.\relax }{table.caption.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Query Classification}{5}{subsection.4.3}\protected@file@percent }
+\newlabel{sec:impl-classifier}{{4.3}{5}{Query Classification}{subsection.4.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Generation and Prompt Engineering}{5}{subsection.4.4}\protected@file@percent }
+\newlabel{sec:impl-gen}{{4.4}{5}{Generation and Prompt Engineering}{subsection.4.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Conversation Memory}{5}{subsection.4.5}\protected@file@percent }
+\newlabel{sec:impl-conv}{{4.5}{5}{Conversation Memory}{subsection.4.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Evaluation}{6}{section.5}\protected@file@percent }
+\newlabel{sec:eval}{{5}{6}{Evaluation}{section.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Test corpus indexed during the demonstration session.\relax }}{6}{table.caption.12}\protected@file@percent }
+\newlabel{tab:corpus}{{2}{6}{Test corpus indexed during the demonstration session.\relax }{table.caption.12}{}}
+\@writefile{toc}{\contentsline {paragraph}{Hardware.}{6}{section*.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Latencies (informal).}{6}{section*.14}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Walk-through.}{6}{section*.15}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The Streamlit UI on a fresh load. The left sidebar lists prior conversations recovered from SQLite; the centre panel shows the empty welcome state; the chat input and the paperclip popover are docked at the bottom. Four documents are already indexed.\relax }}{6}{figure.caption.16}\protected@file@percent }
+\newlabel{fig:ui-empty}{{2}{6}{The Streamlit UI on a fresh load. The left sidebar lists prior conversations recovered from SQLite; the centre panel shows the empty welcome state; the chat input and the paperclip popover are docked at the bottom. Four documents are already indexed.\relax }{figure.caption.16}{}}
+\citation{gao2024ragsurvey}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Grounded answer to a \textsc  {factual} document query. The four-word answer is followed by three source citations rendered from chunk metadata (file, page, snippet).\relax }}{7}{figure.caption.17}\protected@file@percent }
+\newlabel{fig:ui-cited}{{3}{7}{Grounded answer to a \textsc {factual} document query. The four-word answer is followed by three source citations rendered from chunk metadata (file, page, snippet).\relax }{figure.caption.17}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Discussion and Future Work}{7}{section.6}\protected@file@percent }
+\newlabel{sec:disc}{{6}{7}{Discussion and Future Work}{section.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{Limitations.}{7}{section*.20}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Multi-turn conversation. Turn\nobreakspace  {}1 is grounded against documents; turn\nobreakspace  {}2 is routed to the general-chat branch and the model openly states its knowledge limit instead of hallucinating a revenue figure.\relax }}{8}{figure.caption.18}\protected@file@percent }
+\newlabel{fig:ui-multi}{{4}{8}{Multi-turn conversation. Turn~1 is grounded against documents; turn~2 is routed to the general-chat branch and the model openly states its knowledge limit instead of hallucinating a revenue figure.\relax }{figure.caption.18}{}}
+\@writefile{toc}{\contentsline {paragraph}{Future work.}{8}{section*.21}\protected@file@percent }
+\bibstyle{IEEEtran}
+\bibdata{refs}
+\bibcite{vaswani2017attention}{{1}{}{{}}{{}}}
+\bibcite{touvron2023llama2}{{2}{}{{}}{{}}}
+\bibcite{lewis2020rag}{{3}{}{{}}{{}}}
+\bibcite{gao2024ragsurvey}{{4}{}{{}}{{}}}
+\bibcite{xiao2024bge}{{5}{}{{}}{{}}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces The upload popover. Supported formats: PDF, DOCX, TXT, PNG, JPG. Identical files are de-duplicated on hash before any parsing or embedding work occurs.\relax }}{9}{figure.caption.19}\protected@file@percent }
+\newlabel{fig:ui-upload}{{5}{9}{The upload popover. Supported formats: PDF, DOCX, TXT, PNG, JPG. Identical files are de-duplicated on hash before any parsing or embedding work occurs.\relax }{figure.caption.19}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Conclusion}{9}{section.7}\protected@file@percent }
+\newlabel{sec:concl}{{7}{9}{Conclusion}{section.7}{}}
+\bibcite{robertson2009bm25}{{6}{}{{}}{{}}}
+\bibcite{asai2024selfrag}{{7}{}{{}}{{}}}
+\bibcite{karpukhin2020dpr}{{8}{}{{}}{{}}}
+\bibcite{reimers2019sbert}{{9}{}{{}}{{}}}
+\bibcite{wang2021milvus}{{10}{}{{}}{{}}}
+\bibcite{malkov2020hnsw}{{11}{}{{}}{{}}}
+\bibcite{ollama}{{12}{}{{}}{{}}}
+\providecommand\NAT@force@numbers{}\NAT@force@numbers
+\gdef \@abspage@last{10}
