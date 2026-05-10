@@ -67,10 +67,7 @@
   \vspace{2pt}
   \large A Local-First Retrieval-Augmented Generation System for\\Private Document Question Answering
 }
-\author{
-  Shahab Azmi\\
-  \small\texttt{asaadkhalil1@gmail.com}
-}
+\author{Shahab Azmi}
 \date{May 2026}
 
 \begin{document}
@@ -198,55 +195,78 @@ state plus Milvus Lite for vectors). Figure~\ref{fig:arch} sketches the data flo
 
 \begin{figure}[t]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
-  node distance=4mm and 4mm,
   every node/.style={font=\footnotesize,align=center},
-  block/.style={rectangle,draw=black!55,rounded corners=2pt,minimum width=22mm,
+  block/.style={rectangle,draw=black!55,rounded corners=2pt,minimum width=27mm,
                 minimum height=8mm,inner sep=3pt,fill=blue!4},
-  store/.style={cylinder,shape border rotate=90,draw=black!55,minimum width=18mm,
-                minimum height=10mm,inner sep=2pt,aspect=0.4,fill=orange!10},
-  user/.style ={rectangle,rounded corners=2pt,draw=black!55,minimum width=22mm,
+  ingblk/.style={rectangle,draw=black!55,rounded corners=2pt,minimum width=32mm,
+                 minimum height=8mm,inner sep=3pt,fill=green!5},
+  qryblk/.style={rectangle,draw=black!55,rounded corners=2pt,minimum width=32mm,
+                 minimum height=8mm,inner sep=3pt,fill=orange!6},
+  store/.style={cylinder,shape border rotate=90,draw=black!55,minimum width=22mm,
+                minimum height=10mm,inner sep=2pt,aspect=0.4,fill=yellow!12},
+  user/.style ={rectangle,rounded corners=2pt,draw=black!55,minimum width=20mm,
                 minimum height=7mm,fill=gray!10},
-  arr/.style ={-Stealth,thick,black!65},
+  arr/.style  ={-Stealth,thick,black!65},
+  rdarr/.style={-Stealth,thick,black!55,dashed},
+  lab/.style  ={font=\scriptsize\itshape,black!70,inner sep=1pt,fill=white,
+                fill opacity=0.85,text opacity=1},
 ]
-% --- Top: client --------------------------------------------------------
-\node[user] (browser) {Browser};
-\node[block, right=8mm of browser] (st) {Streamlit UI\\(\texttt{frontend/app.py})};
+% --- Top tier: client + API ---------------------------------------------
+\node[user]   at (0,    0)    (browser)   {Browser};
+\node[block]  at (3.4,  0)    (st)        {Streamlit UI\\(\texttt{frontend/app.py})};
+\node[block]  at (7.5,  0)    (api)       {FastAPI\\(\texttt{backend/main.py})};
 
-% --- Middle: API + services ---------------------------------------------
-\node[block, below=10mm of st] (api) {FastAPI app\\(\texttt{backend/main.py})};
-\node[block, below left=8mm and 0mm of api] (router) {Router\\\& Classifier};
-\node[block, below=8mm of api]              (retrieve) {Hybrid\\Retrieval};
-\node[block, below right=8mm and 0mm of api] (gen) {Generator\\(Ollama)};
+% --- Ingest column (left, green) ---------------------------------------
+\node[ingblk] at (2.5, -2.0)  (parse)     {Parser\\PDF / DOCX / TXT / IMG};
+\node[ingblk] at (2.5, -3.3)  (chunk)     {Chunker\\(500 chars, table-aware)};
+\node[ingblk] at (2.5, -4.6)  (embed)     {Embedder\\\texttt{bge-small-en-v1.5}};
 
-\node[block, left =12mm of router] (ingest) {Ingestion\\Parse + Chunk};
+% --- Query column (right, orange) — Generator placed beside Retrieval --
+\node[qryblk] at (9.0, -2.0)  (classify)  {Query Classifier\\(7 types)};
+\node[qryblk] at (9.0, -3.3)  (retrieve)  {Hybrid Retrieval\\BM25 + Vector + Rerank};
+\node[qryblk] at (13.0,-3.3)  (gen)       {Generator\\Ollama \texttt{llama3.2:3b}};
 
-% --- Stores -------------------------------------------------------------
-\node[store, below=12mm of retrieve] (sqlite) {SQLite\\\texttt{app.db}};
-\node[store, right=10mm of sqlite]   (milvus) {Milvus Lite\\HNSW + L2};
-\node[store, left =10mm of sqlite]   (uploads){\texttt{uploads/}\\filesystem};
+% --- Storage tier (centred between columns, well below pipelines) ------
+\node[store]  at (5.0, -6.0)  (sqlite)    {SQLite\\\texttt{app.db}};
+\node[store]  at (7.0, -6.0)  (milvus)    {Milvus Lite\\HNSW, L2};
 
-% --- Edges --------------------------------------------------------------
-\draw[arr] (browser.east) -- node[above]{HTTP} (st.west);
-\draw[arr] (st.south)     -- (api.north);
+% --- Top tier arrows ----------------------------------------------------
+\draw[arr] (browser.east) -- node[lab,above]{HTTP} (st.west);
+\draw[arr] (st.east)      -- (api.west);
 
-\draw[arr] (api.west)      -| (router.north);
-\draw[arr] (api.south)     -- (retrieve.north);
-\draw[arr] (api.east)      -| (gen.north);
+% --- API branches into pipelines ---------------------------------------
+\draw[arr] (api.south) -- ++(0,-3mm) -|
+  node[lab,pos=0.2,above]{\texttt{/upload}} (parse.north);
+\draw[arr] (api.south) -- ++(0,-3mm) -|
+  node[lab,pos=0.2,above]{\texttt{/query}}  (classify.north);
 
-\draw[arr] (router.south)  |- (retrieve.west);
-\draw[arr] (retrieve.east) -- (gen.west);
+% --- Vertical and horizontal pipelines ---------------------------------
+\draw[arr] (parse)        -- (chunk);
+\draw[arr] (chunk)        -- (embed);
+\draw[arr] (classify)     -- (retrieve);
+\draw[arr] (retrieve.east) -- node[lab,above]{context} (gen.west);
 
-\draw[arr] (ingest.east)   -- (router.west);
+% --- Embedder writes to both stores ------------------------------------
+\draw[arr] (embed.south)
+  -- node[lab,left,pos=0.55]{chunks} (sqlite.north west);
+\draw[arr] (embed.south east)
+  -- node[lab,above,sloped,pos=0.55]{vectors} (milvus.north west);
 
-\draw[arr] (retrieve.south) -- (sqlite.north);
-\draw[arr] (sqlite.east)    -- (milvus.west);
-\draw[arr] (ingest.south)   |- (uploads.west);
-
-\end{tikzpicture}
-\caption{High-level architecture. Solid arrows indicate data flow during \texttt{/upload} and
-\texttt{/query} requests. The vector store is rebuilt from canonical SQLite chunks on startup
-if its file is missing, which makes the SQLite database the single source of truth.}
+% --- Retrieval reads from both stores (dashed) -------------------------
+\draw[rdarr] (sqlite.north east)
+  -- node[lab,above,sloped,pos=0.5]{BM25 read} (retrieve.south west);
+\draw[rdarr] (milvus.north)
+  -- node[lab,right,pos=0.55]{vector read} (retrieve.south);
+\end{tikzpicture}%
+}
+\caption{High-level architecture. The \texttt{/upload} pipeline (green, left column) parses,
+chunks, and embeds the file, then writes chunks to SQLite and embeddings to Milvus Lite. The
+\texttt{/query} pipeline (orange, right) classifies the query, then Hybrid Retrieval reads BM25
+candidates from SQLite and dense candidates from Milvus (dashed arrows), fuses them, and passes
+the top-$k$ context to the local LLM. SQLite is the single source of truth: the vector store is
+rebuilt from it on startup if its file is missing.}
 \label{fig:arch}
 \end{figure}
 
@@ -281,11 +301,11 @@ element per table row joined by \verb|" | "| -- this preserves cell structure fo
 Plain text becomes a single element. Images go through \texttt{unstructured.partition.auto},
 which transparently runs OCR.
 
-Elements are then grouped by page and passed to a \texttt{RecursiveCharacterTextSplitter} with
-\texttt{chunk\_size}~$=500$ and \texttt{chunk\_overlap}~$=100$ characters. The splitter
-prefers paragraph boundaries first, falling back to single newlines, then to sentence
-boundaries, and finally to word boundaries. Each chunk inherits the source page's metadata: file
-name, page number, document UUID, and a heuristic \emph{section} label.
+Elements are then grouped by page. Each group is passed to LangChain's
+\texttt{Recursive\-Character\-TextSplitter} with a target chunk size of $500$ characters and a
+$100$-character overlap. The splitter prefers paragraph boundaries first, falling back to single
+newlines, then sentence boundaries, then word boundaries. Each chunk inherits the source page's
+metadata: file name, page number, document UUID, and a heuristic \emph{section} label.
 
 \paragraph{Section detection.} We scan the first six non-trivial lines of each page text block
 and classify a heading as the first match of: an all-uppercase line of length~$\geq 4$; a numbered
