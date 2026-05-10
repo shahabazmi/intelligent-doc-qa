@@ -119,8 +119,8 @@ store, generator and conversation memory all run on a single Apple\,M2
                  minimum height=6mm,inner sep=2pt,fill=green!5},
   qryblk/.style={rectangle,draw=black!55,rounded corners=2pt,minimum width=28mm,
                  minimum height=6mm,inner sep=2pt,fill=orange!6},
-  store/.style={cylinder,shape border rotate=90,draw=black!55,minimum width=18mm,
-                minimum height=8mm,inner sep=1pt,aspect=0.4,fill=yellow!12},
+  store/.style={rectangle,rounded corners=2pt,draw=black!55,minimum width=46mm,
+                minimum height=8mm,inner sep=2pt,fill=yellow!12},
   user/.style ={rectangle,rounded corners=2pt,draw=black!55,minimum width=16mm,
                 minimum height=6mm,fill=gray!10},
   arr/.style  ={-Stealth,thick,black!65},
@@ -140,8 +140,7 @@ store, generator and conversation memory all run on a single Apple\,M2
 \node[qryblk] at (8.6, -2.5)  (retrieve)  {Hybrid Retrieval\\BM25 + Vector + Rerank};
 \node[qryblk] at (8.6, -3.6)  (gen)       {Generator\\\texttt{llama3.2:3b}};
 
-\node[store]  at (4.7, -4.9)  (sqlite)    {SQLite\\\texttt{app.db}};
-\node[store]  at (6.6, -4.9)  (milvus)    {Milvus Lite\\HNSW, L2};
+\node[store]  at (5.7, -4.9)  (storage)   {SQLite (\texttt{app.db})\quad+\quad Milvus Lite (HNSW, L2)};
 
 \draw[arr] (browser.east) -- node[lab,above]{HTTP} (st.west);
 \draw[arr] (st.east)      -- (api.west);
@@ -153,14 +152,11 @@ store, generator and conversation memory all run on a single Apple\,M2
 \draw[arr] (chunk)    -- (embed);
 \draw[arr] (classify) -- (retrieve);
 \draw[arr] (retrieve) -- node[lab,right]{context} (gen);
-\draw[arr] (embed.south)
-  -- node[lab,left,pos=0.6]{chunks} (sqlite.north west);
-\draw[arr] (embed.south east)
-  -- node[lab,above,sloped,pos=0.55]{vectors} (milvus.north west);
-\draw[rdarr] (sqlite.north east)
-  -- node[lab,above,sloped,pos=0.45]{BM25} (retrieve.south west);
-\draw[rdarr] (milvus.north)
-  -- node[lab,right,pos=0.55]{vector} (retrieve.south);
+% Write: embed → combined storage
+\draw[arr] (embed.south) -- (storage.north west);
+
+% Read: storage → retrieve, routed around the right side of Generator
+\draw[rdarr] (storage.east) -- ++(2.6,0) -- ++(0,2.4) -- (retrieve.east);
 \end{tikzpicture}
 
 \smallskip
