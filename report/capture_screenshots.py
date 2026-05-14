@@ -1,5 +1,11 @@
 """
-Capture screenshots of the running Streamlit UI for the LaTeX report.
+Capture Streamlit UI screenshots of the running Enterprise Doc AI for the
+report and presentation.
+
+Three PDFs are expected to be indexed already:
+  - NVIDIA-2025-Annual-Report.pdf
+  - NASDAQ_TSLA_2024.pdf
+  - pia-ncic-020723.pdf
 
 Requires the dev servers to be running:
   uvicorn backend.main:app --reload --reload-dir backend   # :8000
@@ -13,7 +19,7 @@ import sys
 import time
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright, expect, TimeoutError as PWTimeout
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 BASE = "http://localhost:8501"
 HERE = Path(__file__).parent
@@ -21,36 +27,49 @@ OUT = HERE / "figures"
 OUT.mkdir(parents=True, exist_ok=True)
 
 VIEWPORT = {"width": 1440, "height": 900}
-DEVICE_SCALE = 2  # crisp PNG for print
+DEVICE_SCALE = 2
 
-LLM_TIMEOUT_MS = 180_000   # 3-min ceiling for slow local LLM
-SETTLE_MS = 1500           # post-render breathing room
+LLM_TIMEOUT_MS = 240_000
+SETTLE_MS = 1500
 
 
 def shot(page, name: str, *, full_page: bool = True):
     path = OUT / f"{name}.png"
     page.screenshot(path=str(path), full_page=full_page)
-    print(f"  saved → {path}")
+    print(f"  saved -> {path}")
     return path
 
 
 def wait_for_message_count(page, expected: int, timeout_ms: int = LLM_TIMEOUT_MS):
-    """Wait until at least `expected` chat messages are visible."""
     deadline = time.time() + timeout_ms / 1000
+    count = 0
     while time.time() < deadline:
         count = page.locator('[data-testid="stChatMessage"]').count()
         if count >= expected:
             return count
         time.sleep(0.5)
-    raise PWTimeout(f"only saw {count} chat messages, expected {expected}")
+    raise PWTimeout(f"only saw {count} messages, expected {expected}")
 
 
 def submit_query(page, text: str):
-    """Type into the Streamlit chat_input and submit."""
     box = page.locator('[data-testid="stChatInput"] textarea')
     box.click()
     box.fill(text)
     box.press("Enter")
+
+
+def new_conversation(page):
+    """Click the 'New conversation' button if present; otherwise reload."""
+    try:
+        btn = page.get_by_role("button", name="New chat")
+        if btn.count():
+            btn.first.click()
+            page.wait_for_timeout(SETTLE_MS)
+            return
+    except Exception:
+        pass
+    page.reload(wait_until="networkidle")
+    page.wait_for_timeout(SETTLE_MS)
 
 
 def main() -> int:
@@ -62,31 +81,46 @@ def main() -> int:
         )
         page = ctx.new_page()
 
-        print(f"[1/4] Loading {BASE} …")
+        print(f"[1/5] Loading {BASE} ...")
         page.goto(BASE, wait_until="networkidle", timeout=60_000)
         page.wait_for_selector('[data-testid="stSidebar"]', timeout=30_000)
         page.wait_for_timeout(SETTLE_MS + 1500)
         shot(page, "01_main_ui")
 
-        print("[2/4] Submitting first query (extractive document QA)…")
-        submit_query(page, "Who is the instructor of the NLP course?")
-        # 2 messages = user + assistant
+        # ---- PDF 1: NVIDIA ----
+        print("[2/5] PDF 1 (NVIDIA Annual Report) - factual query ...")
+        new_conversation(page)
+        submit_query(page, "Who is the CEO of NVIDIA?")
         wait_for_message_count(page, 2)
         page.wait_for_timeout(SETTLE_MS)
-        shot(page, "02_query_with_citations")
+        shot(page, "02_nvidia_query")
 
-        print("[3/4] Submitting second query (multi-turn, financial doc)…")
+        # ---- PDF 2: Tesla ----
+        print("[3/5] PDF 2 (Tesla 10-K) - numerical query ...")
+        new_conversation(page)
         submit_query(page, "What was Tesla's total automotive revenue in 2024?")
+        wait_for_message_count(page, 2)
+        page.wait_for_timeout(SETTLE_MS)
+        shot(page, "03_tesla_query")
+
+        # ---- PDF 3: NCIC PIA ----
+        print("[4/5] PDF 3 (NCIC PIA) - reasoning query ...")
+        new_conversation(page)
+        submit_query(page, "What is the purpose of the NCIC system as described in this document?")
+        wait_for_message_count(page, 2)
+        page.wait_for_timeout(SETTLE_MS)
+        shot(page, "04_ncic_query")
+
+        # ---- Multi-turn chat illustrating router behaviour ----
+        print("[5/5] Multi-turn (router demo) ...")
+        new_conversation(page)
+        submit_query(page, "Summarise the NVIDIA annual report in three points")
+        wait_for_message_count(page, 2)
+        page.wait_for_timeout(SETTLE_MS)
+        submit_query(page, "hello how are you")
         wait_for_message_count(page, 4)
         page.wait_for_timeout(SETTLE_MS)
-        shot(page, "03_multi_turn_chat")
-
-        print("[4/4] Opening upload popover…")
-        # Click the paperclip popover trigger (above chat input)
-        popover_btn = page.locator('[data-testid="stPopover"] button').first
-        popover_btn.click()
-        page.wait_for_timeout(SETTLE_MS)
-        shot(page, "04_upload_dialog", full_page=False)
+        shot(page, "05_multi_turn_router")
 
         browser.close()
 

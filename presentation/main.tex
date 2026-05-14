@@ -12,115 +12,161 @@
 \usepackage{tikz}
 \usepackage{listings}
 
-\usetikzlibrary{positioning,shapes.geometric,arrows.meta,calc,fit,backgrounds}
+\usetikzlibrary{positioning,shapes.geometric,arrows.meta,calc,fit,backgrounds,chains}
 
-% --- Theme: clean, paper-like (matches the article) -------------------------
+% --- Palette -----------------------------------------------------------------
+\definecolor{brand}{HTML}{2F4F86}      % deep blue
+\definecolor{brandLite}{HTML}{4F6FA6}  % softer blue
+\definecolor{ingest}{HTML}{0E7C66}     % teal-green
+\definecolor{query}{HTML}{C2410C}      % burnt orange
+\definecolor{accentBg}{HTML}{F2F4F8}   % page tint
+\definecolor{surface}{HTML}{FAFBFD}    % card background
+\definecolor{textMute}{HTML}{4B5563}
+\definecolor{textSoft}{HTML}{6B7280}
+
+% --- Theme -------------------------------------------------------------------
 \usetheme{default}
 \usecolortheme{default}
 \beamertemplatenavigationsymbolsempty
-\setbeamertemplate{footline}{%
-  \hfill{\scriptsize\color{black!50}\insertframenumber\,/\,\inserttotalframenumber}\hspace*{4mm}\vspace*{2mm}%
+
+% Custom frametitle with accent bar
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip
+  \begin{beamercolorbox}[wd=\paperwidth,ht=10mm,dp=2mm,leftskip=8mm,rightskip=8mm]{frametitle}%
+    \vspace{1mm}%
+    {\color{brand!30}\rule[1.1ex]{6mm}{0.4ex}}\hspace{2mm}%
+    \insertframetitle\strut
+  \end{beamercolorbox}%
+  \vspace{-2mm}%
 }
-\setbeamercolor{structure}{fg=blue!50!black}
-\setbeamercolor{frametitle}{fg=blue!50!black,bg=white}
-\setbeamercolor{title}{fg=blue!50!black}
-\setbeamercolor{subtitle}{fg=black!75}
-\setbeamercolor{author}{fg=black!75}
-\setbeamercolor{date}{fg=black!75}
+
+% Footer with brand
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=\paperwidth,ht=4mm,dp=1mm,leftskip=8mm,rightskip=8mm]{footline}%
+      {\scriptsize\color{textMute}\textbf{Enterprise Doc AI}\,\,$\cdot$\,\,Azmi \& Gupta\hfill\insertframenumber\,/\,\inserttotalframenumber}%
+    \end{beamercolorbox}%
+  }%
+  \vskip0pt%
+}
+
+\setbeamercolor{structure}{fg=brand}
+\setbeamercolor{frametitle}{fg=brand,bg=white}
+\setbeamercolor{title}{fg=brand}
+\setbeamercolor{subtitle}{fg=textMute}
+\setbeamercolor{author}{fg=textMute}
+\setbeamercolor{date}{fg=textMute}
 \setbeamerfont{frametitle}{series=\bfseries}
 \setbeamerfont{title}{series=\bfseries,size=\Large}
-\setbeamercolor{itemize item}{fg=blue!50!black}
-\setbeamercolor{itemize subitem}{fg=blue!50!black}
-\setbeamercolor{enumerate item}{fg=blue!50!black}
-\setbeamercolor{block title}{fg=white,bg=blue!50!black}
-\setbeamercolor{block body}{bg=blue!4}
-\setbeamertemplate{itemize item}{\textbullet}
+\setbeamercolor{itemize item}{fg=brand}
+\setbeamercolor{itemize subitem}{fg=brand}
+\setbeamercolor{enumerate item}{fg=brand}
+\setbeamercolor{block title}{fg=white,bg=brand}
+\setbeamercolor{block body}{bg=brand!4}
+\setbeamertemplate{itemize item}{\raisebox{0.2ex}{\scriptsize\textbullet}}
 \setbeamertemplate{itemize subitem}{\textendash}
 
-% --- Listings (matches report) ----------------------------------------------
-\definecolor{codebg}{RGB}{246,248,250}
-\definecolor{codecmt}{RGB}{106,115,125}
-\definecolor{codekw}{RGB}{215,58,73}
-\definecolor{codestr}{RGB}{32,113,69}
-
-\lstdefinestyle{py}{
-  backgroundcolor=\color{codebg},
-  basicstyle=\ttfamily\scriptsize,
-  commentstyle=\color{codecmt}\itshape,
-  keywordstyle=\color{codekw}\bfseries,
-  stringstyle=\color{codestr},
-  language=Python,
-  numbers=none,
-  breaklines=true,
-  frame=single,
-  framesep=4pt,
-  rulecolor=\color{black!18},
-  showstringspaces=false,
-  tabsize=2,
+% Step badge
+\newcommand{\stepbadge}[2]{%
+  \tikz[baseline=(b.base)]\node[circle,fill=#1,text=white,inner sep=1.5pt,minimum size=4.6mm,font=\bfseries\small](b){#2};%
 }
+
+% Reusable step card: \stepcard{colour}{_unused}{number}{title}{body}{right-callout}
+% Compact horizontal card: coloured number badge, bold title inline with body,
+% small italic right-aligned annotation.
+\newcommand{\stepcard}[6]{%
+  \noindent\begin{tikzpicture}
+    \node[draw=#1!55,line width=0.4pt,rounded corners=3pt,fill=surface,
+          minimum width=0.985\linewidth,inner sep=1.6mm,align=left,
+          text width=0.94\linewidth,font=\scriptsize] (c) {%
+      \begin{minipage}[c]{0.05\linewidth}\centering
+        \tikz\node[circle,fill=#1,text=white,inner sep=0pt,minimum size=5.4mm,font=\bfseries\scriptsize]{#3};
+      \end{minipage}\hfill
+      \begin{minipage}[c]{0.64\linewidth}
+        \textbf{\color{#1!85!black}#4}\;\;{\color{textMute}#5}
+      \end{minipage}\hfill
+      \begin{minipage}[c]{0.25\linewidth}\raggedleft
+        {\tiny\itshape\color{#1!80!black}#6}
+      \end{minipage}%
+    };
+  \end{tikzpicture}\par\vspace{0.7mm}}
 
 \graphicspath{{../report/figures/}}
 
 % --- Title -------------------------------------------------------------------
 \title[Enterprise Doc AI]{\textbf{Enterprise Doc AI}}
-\subtitle{A Local-First Retrieval-Augmented Generation System\\for Private Document Question Answering}
-\author{Shahab Azmi}
+\subtitle{\small A Local-First Document Question Answering System\\
+  \small Project Summary \,$\cdot$\, NVIDIA / Tesla / NCIC PDFs}
+\author{Shahab Azmi \quad\textperiodcentered\quad Chitransh Kumar Gupta}
 \date{May 2026}
 
 \begin{document}
 
 % =============================================================================
+% --- Slide 1: Title ----------------------------------------------------------
 \begin{frame}[plain]
-  \titlepage
+\begin{tikzpicture}[overlay,remember picture]
+  \fill[brand!8] (current page.south west) rectangle ($(current page.south east)+(0,1.6cm)$);
+  \fill[brand] (current page.north west) rectangle ($(current page.north east)+(0,-1.9cm)$);
+  \node[white,anchor=west,xshift=10mm,yshift=-7mm,font=\LARGE\bfseries] at (current page.north west) {Enterprise Doc AI};
+  \node[white!85,anchor=west,xshift=10mm,yshift=-16mm,font=\small\itshape] at (current page.north west) {A Local-First Document Question Answering System};
+\end{tikzpicture}
+\vspace{3.0cm}
+
+\begin{center}
+{\Large\textbf{\color{brand} Project Summary}}\\[6pt]
+{\large\color{textMute}\itshape What we built, the problems we hit,\\
+  and how we solved them}\\[20pt]
+{\large Shahab Azmi\,\,\textperiodcentered\,\,Chitransh Kumar Gupta}\\[6pt]
+{\small\color{textSoft}\itshape A private, on-device assistant for any document --- built from scratch.}\\[6pt]
+{\small\color{textMute} May 2026}
+\end{center}
 \end{frame}
 
-% --- Slide 2: Motivation -----------------------------------------------------
-\begin{frame}{Motivation}
-\begin{itemize}\setlength{\itemsep}{4pt}
-  \item Hosted LLMs cannot be trusted with confidential material -- contracts,
-        exam papers, internal HR documents.
-  \item Generic LLMs hallucinate; hosted RAG services are opaque about
-        \emph{which passages} grounded an answer.
-  \item Paid APIs are metered: every page indexed and every query has a unit cost.
-\end{itemize}
-\medskip
-\begin{block}{Thesis}
-\textit{Push RAG to its local-first limit.} Parser, embedder, BM25 index, vector
-store, generator and conversation memory all run on a single Apple\,M2
-(8\,GB RAM, no GPU, no internet at query time).
-\end{block}
+% =============================================================================
+% --- Slide 2: Problem & Goal -------------------------------------------------
+\begin{frame}{\stepbadge{brand}{1} Why We Built This}
+\vspace{-1mm}\scriptsize
+Public AI assistants and hosted RAG services have three real problems for
+anyone working with private documents:
+\smallskip
+
+\stepcard{query}{lock}{1}{Privacy.}{%
+Your file leaves your computer --- the provider receives, stores, and may
+train on it. Unacceptable for confidential material.}{%
+the document\\never stays\\on your laptop}
+
+\stepcard{query}{brain}{2}{Hallucination.}{%
+Small LLMs add hedge phrases (``could lead to'', ``analysts believe'')
+not in the source --- and you can't see which sentence grounded the answer.}{%
+you can't verify\\where the answer\\came from}
+
+\stepcard{query}{coins}{3}{Cost.}{%
+Hosted RAG charges per token, per page, per query. Indexing 1{,}000 pages
+and asking 50 follow-up questions adds up fast --- you can't experiment freely.}{%
+every page +\\every question\\= money}
+
+\vspace{2mm}
+\centering\scriptsize\itshape\color{textSoft}
+\emph{Our goal:} a complete document QA system where every piece runs on
+the user's laptop --- on the user's data, with zero cost per query.
 \end{frame}
 
-% --- Slide 3: Contributions --------------------------------------------------
-\begin{frame}{Contributions}
-\begin{enumerate}\setlength{\itemsep}{3pt}
-  \item A complete, runnable \textbf{local-first RAG pipeline} -- BGE bi-encoder,
-        Okapi BM25, and a 3\,B Q4-quantised generator served by Ollama.
-  \item A \textbf{seven-class query classifier} that routes each query to a
-        different prompt template, retrieval depth, and token budget.
-        \emph{Two of seven classes bypass the LLM entirely.}
-  \item A \textbf{hybrid reranker} fusing normalised BM25 and dense ranks, plus
-        small domain-aware bonuses tuned for personal-document corpora.
-  \item A \textbf{table-aware chunker} that detects high-density numeric line
-        patterns and preserves their structure for retrieval over financial PDFs.
-  \item A \textbf{persistence design} where SQLite is the single source of truth
-        and the embedded vector store is rebuilt from it on startup.
-\end{enumerate}
-\end{frame}
-
-% --- Slide 4: Architecture ---------------------------------------------------
-\begin{frame}{System Architecture}
+% =============================================================================
+% --- Slide 3: System Architecture --------------------------------------------
+\begin{frame}{\stepbadge{brand}{2} System Architecture}
 \centering
 \begin{tikzpicture}[
   every node/.style={font=\scriptsize,align=center},
   block/.style={rectangle,draw=black!55,rounded corners=2pt,minimum width=22mm,
-                minimum height=6mm,inner sep=2pt,fill=blue!4},
-  ingblk/.style={rectangle,draw=black!55,rounded corners=2pt,minimum width=28mm,
-                 minimum height=6mm,inner sep=2pt,fill=green!5},
-  qryblk/.style={rectangle,draw=black!55,rounded corners=2pt,minimum width=28mm,
-                 minimum height=6mm,inner sep=2pt,fill=orange!6},
+                minimum height=6mm,inner sep=2pt,fill=brand!6},
+  ingblk/.style={rectangle,draw=ingest!60,rounded corners=2pt,minimum width=28mm,
+                 minimum height=6mm,inner sep=2pt,fill=ingest!10},
+  qryblk/.style={rectangle,draw=query!60,rounded corners=2pt,minimum width=28mm,
+                 minimum height=6mm,inner sep=2pt,fill=query!10},
   store/.style={rectangle,rounded corners=2pt,draw=black!55,minimum width=46mm,
-                minimum height=8mm,inner sep=2pt,fill=yellow!12},
+                minimum height=8mm,inner sep=2pt,fill=yellow!15},
   user/.style ={rectangle,rounded corners=2pt,draw=black!55,minimum width=16mm,
                 minimum height=6mm,fill=gray!10},
   arr/.style  ={-Stealth,thick,black!65},
@@ -131,210 +177,256 @@ store, generator and conversation memory all run on a single Apple\,M2
 \node[user]   at (0,    0)    (browser)   {Browser};
 \node[block]  at (3.0,  0)    (st)        {Streamlit UI};
 \node[block]  at (6.4,  0)    (api)       {FastAPI};
+\node[block]  at (9.6,  0)    (rt)        {Router};
 
 \node[ingblk] at (2.5, -1.4)  (parse)     {Parser\\PDF / DOCX / TXT / IMG};
 \node[ingblk] at (2.5, -2.5)  (chunk)     {Chunker\\(table-aware)};
 \node[ingblk] at (2.5, -3.6)  (embed)     {Embedder\\\texttt{bge-small-en-v1.5}};
 
-\node[qryblk] at (8.6, -1.4)  (classify)  {Query Classifier\\(7 types)};
-\node[qryblk] at (8.6, -2.5)  (retrieve)  {Hybrid Retrieval\\BM25 + Vector + Rerank};
-\node[qryblk] at (8.6, -3.6)  (gen)       {Generator\\\texttt{llama3.2:3b}};
+\node[qryblk] at (9.6, -1.4)  (classify)  {Query Classifier\\(7 types)};
+\node[qryblk] at (9.6, -2.5)  (retrieve)  {Hybrid Retrieval\\BM25 + Vector + Rerank};
+\node[qryblk] at (9.6, -3.6)  (gen)       {Generator\\\texttt{llama3.2:3b}};
 
-\node[store]  at (5.7, -4.9)  (storage)   {SQLite (\texttt{app.db})\quad+\quad Milvus Lite (HNSW, L2)};
+\node[store]  at (6.0, -4.9)  (storage)   {SQLite (\texttt{app.db})\quad+\quad Milvus Lite (HNSW, L2)};
 
 \draw[arr] (browser.east) -- node[lab,above]{HTTP} (st.west);
 \draw[arr] (st.east)      -- (api.west);
-\draw[arr] (api.south) -- ++(0,-2mm) -|
-  node[lab,pos=0.25,above]{\texttt{/upload}} (parse.north);
-\draw[arr] (api.south) -- ++(0,-2mm) -|
-  node[lab,pos=0.25,above]{\texttt{/query}}  (classify.north);
-\draw[arr] (parse)    -- (chunk);
-\draw[arr] (chunk)    -- (embed);
-\draw[arr] (classify) -- (retrieve);
-\draw[arr] (retrieve) -- node[lab,right]{context} (gen);
-% Write: embed → combined storage
-\draw[arr] (embed.south) -- (storage.north west);
+\draw[arr] (api.east)     -- (rt.west);
 
-% Read: storage → retrieve, routed around the right side of Generator
-\draw[rdarr] (storage.east) -- ++(2.6,0) -- ++(0,2.4) -- (retrieve.east);
+\draw[arr,ingest!75] (api.south) -- ++(0,-2mm) -|
+  node[lab,pos=0.25,above]{\texttt{/upload}} (parse.north);
+\draw[arr,query!80] (rt.south) -- ++(0,-2mm) -|
+  node[lab,pos=0.25,above]{\texttt{/query}}  (classify.north);
+\draw[arr,ingest!75] (parse)    -- (chunk);
+\draw[arr,ingest!75] (chunk)    -- (embed);
+\draw[arr,query!80] (classify) -- (retrieve);
+\draw[arr,query!80] (retrieve) -- node[lab,right]{context} (gen);
+\draw[arr] (embed.south) -- (storage.north west);
+\draw[rdarr] (storage.east) -- ++(2.0,0) -- ++(0,2.4) -- (retrieve.east);
 \end{tikzpicture}
 
 \smallskip
 {\scriptsize Solid arrows = write; dashed = read.\quad
-\textcolor{green!40!black}{Green}: ingest pipeline.\quad
-\textcolor{orange!70!black}{Orange}: query pipeline.\quad
-SQLite is the single source of truth.}
+\textcolor{ingest}{$\blacksquare$}\,\textbf{Ingest} pipeline.\quad
+\textcolor{query}{$\blacksquare$}\,\textbf{Query} pipeline.\quad
+\textbf{SQLite is the single source of truth} -- vector store rebuilds on startup if missing.}
 \end{frame}
 
-% --- Slide 5: Table-aware Chunking ------------------------------------------
-\begin{frame}[fragile]{Implementation: Table-aware Chunking}
-\textbf{Problem.} Naive whitespace collapsing destroys tables -- rows and columns merge
-into a single line, hurting both BM25 and vector retrieval scores.
+% =============================================================================
+% --- Slide 4: Upload journey -------------------------------------------------
+\begin{frame}{\stepbadge{ingest}{3} How an Uploaded PDF Becomes Searchable}
+\vspace{-1mm}\scriptsize
+\textbf{Walk-through.} The user drags \texttt{NASDAQ\_TSLA\_2024.pdf}
+(Tesla 10-K, 1.7\,MB) into the chat. Five things happen, in order:
 \smallskip
 
-\textbf{Heuristic.} If $\geq 3$ lines exist and $> 40\,\%$ are short ($<\!80$ chars)
-\emph{and} contain a digit, treat the chunk as tabular: keep line breaks, collapse only
-intra-line whitespace.
-\smallskip
+\stepcard{ingest}{file}{1}{Check the file.}{%
+Look at the file type (PDF/DOCX/TXT/image) and SHA-256-hash the bytes. If
+this exact file was uploaded before, reuse it and skip the rest.}{Tesla 10-K\\$\to$ new, continue}
 
-\begin{lstlisting}[style=py]
-def _normalize_chunk_text(text):
-    lines = [l for l in text.split("\n") if l.strip()]
-    numeric_short = sum(1 for l in lines
-                        if len(l.strip()) < 80 and any(c.isdigit() for c in l))
-    if len(lines) >= 3 and numeric_short / len(lines) > 0.4:
-        return "\n".join(" ".join(l.split()) for l in lines)   # table mode
-    return " ".join(text.split())                              # prose mode
-\end{lstlisting}
-\smallskip
+\stepcard{ingest}{book}{2}{Read the pages.}{%
+\texttt{PyMuPDF} walks every page and pulls the text out. Tables are
+extracted \emph{separately} so revenue rows stay together.}{$\sim$1{,}400 raw\\text + table blocks}
 
-{\small Added after observing that \textit{Tesla, Inc.\ Form 10-K} pages produced
-unreadable single-line chunks before normalisation -- which severely hurt retrieval over
-the 633-chunk financial PDF.}
+\stepcard{ingest}{cut}{3}{Slice the text into small chunks.}{%
+A 200-page PDF is too big to search at once. Split into windows of
+\textbf{500 chars} with \textbf{100 overlap} --- one paragraph per chunk.}{$\to$ 1{,}180\\searchable chunks}
+
+\stepcard{ingest}{cogs}{4}{Convert each chunk into numbers.}{%
+The model \texttt{bge-small-en-v1.5} turns each chunk into \textbf{384
+numbers} that capture its meaning. ``CEO'' and ``Chief Executive'' end up
+nearby.}{1{,}180\,$\times$\,384\\numbers}
+
+\stepcard{ingest}{database}{5}{Save everything locally.}{%
+Text $\to$ SQLite (source of truth). Numbers $\to$ Milvus Lite (fast
+similarity search). The file is now ready to answer questions.}{ready in\\$\approx\!40$\,s}
 \end{frame}
 
-% --- Slide 6: Hybrid Retrieval -----------------------------------------------
-\begin{frame}{Hybrid Retrieval}
-Four-stage pipeline (\texttt{backend/services/retrieval.py}):
-\begin{enumerate}\setlength{\itemsep}{2pt}
-  \item Stop-word removal $+$ alias expansion
-        (\texttt{professor} $\to$ \{\texttt{prof, instructor, lecturer, teacher}\}).
-  \item \textbf{Lexical}: BM25\,Okapi over chunk tokens -- top $\max(3k,12)$ candidates.
-  \item \textbf{Dense}: Milvus Lite (HNSW, L2), top $\max(4k,16)$ candidates;
-        L2 distance $> 1.2$ discarded as too weak.
-  \item \textbf{Rerank}:
-        \[
-          \mathrm{score}(d) \;=\; w_b \cdot \widehat{b}(d) \;+\; (1-w_b) \cdot \widehat{r}(d) \;+\; \beta(q,d)
-        \]
-\end{enumerate}
+% =============================================================================
+% --- Slide 5: Query journey --------------------------------------------------
+\begin{frame}{\stepbadge{query}{4} How a Question Becomes a Grounded Answer}
+\vspace{-1mm}\scriptsize
+\textbf{Walk-through.} The user types \textit{``Who is the CEO of
+NVIDIA?''}. Five things happen, in order:
 \smallskip
-\begin{block}{Domain bonuses ($\beta$, $+0.10$\,--\,$+0.18$)}
-Page-1 boost for instructor queries; \texttt{@}-token bonus for contact queries;
-parenthetical-acronym bonus (``NLP'' matches ``Natural Language Processing (NLP)'');
-$w_b{=}0.7$ for \textsc{numerical} queries (exact terms outweigh semantics).
-\end{block}
+
+\stepcard{query}{route}{1}{Decide what kind of message this is.}{%
+Is it a doc question, chat (``hello''), or live data (``weather'')? ``Who
+is the\ldots'' + PDF loaded $\Rightarrow$ \emph{document question}.}{not chat,\\not weather}
+
+\stepcard{query}{tags}{2}{Decide what KIND of question.}{%
+Seven types: extractive, numerical, provenance, list, reasoning, summary,
+factual. ``CEO'' is a short fact $\Rightarrow$ \textsc{factual}.}{type = Factual\\$(k=3)$}
+
+\stepcard{query}{search}{3}{Search the chunks --- two ways at once.}{%
+\textbf{Keyword (BM25)} finds chunks with literal ``CEO''. \textbf{Meaning
+(Milvus)} finds chunks about \emph{leadership}. Both lists are merged.}{$\sim$50\\candidates}
+
+\stepcard{query}{filter}{4}{Pick the THREE sharpest passages.}{%
+A \emph{cross-encoder} reads each candidate \emph{with} the question and
+scores them tightly. Slower, but much sharper than the first two searches.}{top 3 chunks}
+
+\stepcard{query}{chat}{5}{Generate the answer --- strictly.}{%
+The local LLM (\texttt{llama3.2:3b}) sees \emph{only} those 3 chunks with
+a 10-rule prompt and $T=0$. No outside knowledge.}{$T=0$,\\strict prompt}
+
+\vspace{0.5mm}
+\centering
+\begin{tikzpicture}
+\node[draw=brand!60,line width=0.5pt,rounded corners=3pt,fill=brand!10,inner sep=3pt,
+      font=\scriptsize\bfseries,text=brand!85!black] {%
+Result: ``Mr.\ Huang serves as our President and CEO.'' + 3 source citations};
+\end{tikzpicture}
 \end{frame}
 
-% --- Slide 6: Query Classification ------------------------------------------
-\begin{frame}{Query Classification: 7 Types}
-\centering\small
-\begin{tabularx}{\linewidth}{@{}lccccX@{}}
-\toprule
-Type & $k$ & $w_b$ & $n_{\text{predict}}$ & LLM? & Triggers \\
-\midrule
-\textsc{extractive} & 7 & 0.5 & 250 & \textbf{no}  & ``exact paragraph'', ``verbatim'' \\
-\textsc{provenance} & 3 & 0.5 & 60  & \textbf{no}  & ``which page'', ``where in'' \\
-\textsc{numerical}  & 5 & 0.7 & 60  & yes & ``how many'', ``percentage'' \\
-\textsc{list}       & 5 & 0.6 & 150 & yes & ``list all'', ``enumerate'' \\
-\textsc{reasoning}  & 5 & 0.4 & 120 & yes & ``why does'', ``analyse'' \\
-\textsc{summary}    & 6 & 0.5 & 300 & yes & ``summarise'', ``key points'' \\
-\textsc{factual}    & 3 & 0.5 & 120 & yes & default \\
-\bottomrule
-\end{tabularx}
+% =============================================================================
+% --- Slide 6: Problems we solved ---------------------------------------------
+\begin{frame}{\stepbadge{query}{5} What Broke When I Tested --- and How I Fixed It}
+\vspace{-1mm}\scriptsize
+Three real bugs, each tied to one of the test PDFs, diagnosed in code and
+verified after the fix.
+\smallskip
+
+\stepcard{query}{tesla}{1}{Tesla 10-K --- revenue tables collapsed into one line.}{%
+\emph{Test:} ``Tesla revenue 2024?''
+\emph{Bug:} Rows like \texttt{21,344 23,210 17,933 25,500} merged into one
+string. \emph{Fix} (\texttt{chunker.py}): keep line breaks if $\geq\!3$
+short numeric lines.}{\bfseries After:\\\$77{,}070\,M}
+
+\stepcard{query}{nvidia}{2}{NVIDIA --- the LLM invented hedge phrases.}{%
+\emph{Test:} ``Who is the CEO of NVIDIA?''
+\emph{Bug:} Model added ``could lead to'', opened with ``Based on the
+doc\ldots''. \emph{Fix} (\texttt{generator.py}): strict prompt + ban-list +
+regex opener cleaner.}{\bfseries After:\\``Mr.\ Huang\\\ldots President\\and CEO.''}
+
+\stepcard{query}{ncic}{3}{NCIC PIA --- model paraphrased a verbatim quote.}{%
+\emph{Test:} ``Show the exact paragraph about NCIC.''
+\emph{Bug:} Model re-worded the paragraph. \emph{Fix}
+(\texttt{query\_classifier.py}): \textsc{extractive}+\textsc{provenance}
+types bypass the LLM, return raw chunk.}{\bfseries After:\\$\approx\!200$\,ms\\100\% faithful}
+
+\smallskip
+{\scriptsize\color{textMute}
+\textbf{\color{ingest}\#4 Bi-encoder misses}\,---\,fixed with parallel
+BM25\,+\,vector\,+\,page-1/acronym/\texttt{@} bonuses, then cross-encoder
+rerank.\quad
+\textbf{\color{ingest}\#5 State loss}\,---\,catch Milvus drops, reset
+\& retry; cap LLM context at 3{,}000 chars; auto-rebuild from SQLite on
+startup.}
+\end{frame}
+
+% =============================================================================
+% --- Slide 7: Live demo -- 3 PDFs --------------------------------------------
+\begin{frame}{\stepbadge{brand}{6} Live Demo on Three Real PDFs}
+\centering\scriptsize
+\begin{tabular}{@{}ccc@{}}
+\includegraphics[width=0.31\linewidth,height=3.9cm,keepaspectratio]{02_nvidia_query.png} &
+\includegraphics[width=0.31\linewidth,height=3.9cm,keepaspectratio]{03_tesla_query.png} &
+\includegraphics[width=0.31\linewidth,height=3.9cm,keepaspectratio]{04_ncic_query.png} \\[2pt]
+\begin{minipage}[t]{0.31\linewidth}\raggedright
+\textbf{\color{brand}NVIDIA Annual Report}\\(1{,}631 chunks)\\
+\textsc{factual} query.\\
+\textit{``Who is the CEO of NVIDIA?''}\\[2pt]
+$\Rightarrow$ \textbf{``Mr.\ Huang serves as our President and CEO.''}
+\end{minipage} &
+\begin{minipage}[t]{0.31\linewidth}\raggedright
+\textbf{\color{brand}Tesla 10-K (FY24)}\\(1{,}180 chunks)\\
+\textsc{numerical} query.\\
+\textit{``Tesla's total automotive revenue in 2024?''}\\[2pt]
+$\Rightarrow$ \textbf{``\$77{,}070 million.''}
+\end{minipage} &
+\begin{minipage}[t]{0.31\linewidth}\raggedright
+\textbf{\color{brand}FBI NCIC PIA}\\(259 chunks)\\
+\textsc{reasoning} query.\\
+\textit{``Purpose of the NCIC system?''}\\[2pt]
+$\Rightarrow$ ``Maintained to detect misuse\,\ldots\ troubleshoot system errors\,\ldots''
+\end{minipage}
+\end{tabular}
 \medskip
-\begin{block}{LLM-bypass}
-\textsc{Extractive} returns the top chunk verbatim; \textsc{provenance} returns only
-metadata (file / page / section). Skipping the generator removes 5\,--\,10\,s of latency
-and eliminates the risk of a 3\,B model paraphrasing a quote.
-\end{block}
+\flushleft\small
+Every answer comes with \textbf{three source citations} (file / page /
+snippet) rendered from chunk metadata, so the user can verify the fact at
+its source. All three PDFs are indexed at once in one Milvus~Lite file
+(3{,}070 chunks total) on an Apple~M2 with 8\,GB~RAM.
 \end{frame}
 
-% --- Slide 7: Generation -----------------------------------------------------
-\begin{frame}{Generation \& Prompt Engineering}
-Single Ollama call per query, \texttt{temperature}~$=0$. Prompt $=$ five-rule core
-$+$ type-specific addendum.
-\medskip
-
-\textbf{Five-rule core}
-\begin{itemize}\setlength{\itemsep}{1pt}
-  \item Use only the retrieved context; reply ``Not found in document.'' when context is silent.
-  \item Stop after one answer; prefer exact wording; cap at 3\,--\,4 sentences unless asked otherwise.
-\end{itemize}
-
-\textbf{Type addenda} block specific failure modes -- e.g.\ \textsc{reasoning} forbids
-hedge phrases (``could lead to'', ``analysts believe'') the model would otherwise invent.
-\medskip
-\begin{block}{Empirical finding}
-The retrieved context is concatenated with a \textbf{3000-character cap}.
-Filling the model's full $\sim$4\,k context window with chunks \emph{degraded} answer quality
-on the 3\,B model -- a longer context was a worse context, not a better one.
-\end{block}
-\end{frame}
-
-% --- Slide 8: Evaluation -----------------------------------------------------
-\begin{frame}{Evaluation}
+% =============================================================================
+% --- Slide 8: The whole project, end to end ----------------------------------
+\begin{frame}{\stepbadge{brand}{7} The Whole Project, From Start to End}
+\vspace{-1mm}\scriptsize
 \begin{columns}[T,onlytextwidth]
-\begin{column}{0.46\textwidth}
-\textbf{Corpus} (660 chunks total)
+\begin{column}{0.48\textwidth}
+\textbf{\color{brand}1. The Problem.}\;
+Private files need a smart assistant, but hosted services leak the file,
+hallucinate, and cost money per query.
 \smallskip
 
-{\small
+\textbf{\color{brand}2. What I Built.}\;
+A FastAPI + Streamlit chat app where \emph{every} piece --- parser, BM25,
+embeddings, vector store, LLM, conversations --- runs on the user's
+laptop, offline.
+\smallskip
+
+\textbf{\color{brand}3. How I Tested It.}\;
+On three diverse PDFs to stress different parts of the pipeline:
+\par\smallskip
+{\tiny
 \begin{tabularx}{\linewidth}{@{}Xr@{}}
 \toprule
 Document & Chunks \\
 \midrule
-Tesla 10-K (FY2024) PDF & 633 \\
-NLP Course Syllabus PDF & 16 \\
-AI Homework 1 PDF & 7 \\
-Resume DOCX & 4 \\
+NVIDIA 2025 Annual Report (dense prose) & 1{,}631 \\
+Tesla 10-K FY24 (financial tables)      & 1{,}180 \\
+FBI NCIC PIA (government reasoning)     & 259 \\
+\midrule
+\textbf{Total indexed at once}          & \textbf{3{,}070} \\
 \bottomrule
 \end{tabularx}}
-\medskip
+\smallskip
 
-\textbf{Hardware.} Apple\,M2, 8\,GB unified memory, no GPU.
-\medskip
-
-\textbf{Latencies}\\[2pt]
-Ingest 633-chunk PDF: $\approx 22$\,s.\\
-Factual query: $5$\,--\,$8$\,s.\\
-Summary: $12$\,--\,$18$\,s.\\
-Cold-start LLM load: $\approx 3$\,s once.
+{\tiny\itshape\color{textSoft}(The system supports any user-supplied PDF,
+DOCX, TXT or image --- the three above are demonstration cases.)}
 \end{column}
-\begin{column}{0.52\textwidth}
-\centering
-\includegraphics[width=\linewidth,height=5.7cm,keepaspectratio]{02_query_with_citations.png}\\[2pt]
-{\scriptsize Grounded answer to a \textsc{factual} query, with three source citations
-(file / page / snippet) rendered from chunk metadata.}
+\begin{column}{0.50\textwidth}
+\textbf{\color{brand}4. What Broke and How I Fixed It.}
+\begin{itemize}\setlength{\itemsep}{0pt}
+\item Retrieval misses $\Rightarrow$ Hybrid BM25 + Vector + bonuses.
+\item Hedge-phrase hallucination $\Rightarrow$ strict prompt + regex.
+\item Paraphrased quotes $\Rightarrow$ LLM-bypass for 2 query types.
+\item Tables $\to$ gibberish $\Rightarrow$ numeric-line heuristic.
+\item State loss $\Rightarrow$ SQLite-as-truth + auto-rebuild.
+\end{itemize}
+\smallskip
+
+\textbf{\color{brand}5. What Works Now.}
+\par\smallskip
+{\tiny
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+NVIDIA & ``CEO?'' $\to$ \textbf{Mr.~Huang} (4 words).\\
+Tesla  & ``Revenue 2024?'' $\to$ \textbf{\$77{,}070\,M}.\\
+NCIC   & ``Purpose?'' $\to$ multi-sentence reasoning.\\
+\end{tabularx}}\par
+{\scriptsize All with \textbf{3 source citations}, 5--12\,s, on 8\,GB RAM,
+\emph{no GPU, no cloud}.}
+\smallskip
+
+\textbf{\color{brand}6. What's Next.}\;
+Stronger reranker (\texttt{bge-reranker-base}); SSE token streaming;
+learned router; multilingual via \texttt{bge-m3}.
 \end{column}
 \end{columns}
-\end{frame}
 
-% --- Slide 9: Limitations & Future Work --------------------------------------
-\begin{frame}{Limitations \& Future Work}
-\textbf{Limitations}
-\begin{itemize}\setlength{\itemsep}{1pt}
-  \item \textbf{3\,B generator.} \texttt{llama3.2:3b} occasionally drops a correct retrieved
-        fact in favour of a near-paraphrase; a 7\,--\,13\,B model would lift the answer-quality ceiling.
-  \item \textbf{No cross-encoder rerank.} Hybrid lexical/dense fusion approximates it cheaply,
-        but is weaker.
-  \item \textbf{Rule-based router} can misclassify document queries that look superficially
-        like ``ask the world'' questions.
-\end{itemize}
-\medskip
+\smallskip
+\noindent\begin{tikzpicture}
+\node[fill=brand,text=white,inner sep=2.4mm,minimum width=0.985\linewidth,
+      rounded corners=3pt,font=\scriptsize,align=center,text width=0.94\linewidth]
+  {\textbf{Why it matters.}\;\;A complete RAG pipeline can run
+   \emph{on your laptop, on your data,} without sending a single byte to
+   the cloud.};
+\end{tikzpicture}
 
-\textbf{Future work}
-\begin{enumerate}\setlength{\itemsep}{1pt}
-  \item \textbf{Cross-encoder rerank} (\texttt{bge-reranker-base} over top-20) --
-        likely the single largest retrieval-quality lift.
-  \item \textbf{Streaming responses} -- Ollama token-stream $\to$ FastAPI SSE $\to$ Streamlit.
-  \item \textbf{Learned router} replacing the current rule-based router.
-\end{enumerate}
-\end{frame}
-
-% --- Slide 10: Conclusion ----------------------------------------------------
-\begin{frame}{Conclusion}
-\begin{itemize}\setlength{\itemsep}{4pt}
-  \item A fully \textbf{local-first} RAG system runs end-to-end on commodity laptop
-        hardware, with no cloud or paid-API dependency.
-  \item The engineering value lies in \emph{integration}: type-aware routing, LLM-bypass for
-        the cheapest question types, table-aware chunking, and SQLite-as-source-of-truth.
-  \item Result: a system a single user can run, understand, and \textbf{extend on their own
-        hardware} -- the local-first counterpart to hosted RAG products.
-\end{itemize}
-\vfill
-\centering
-{\Large\textbf{Thank you. Questions?}}\\[6pt]
-{\small\href{https://github.com/shahabazmi/intelligent-doc-qa}{github.com/shahabazmi/intelligent-doc-qa}}
+\smallskip\centering
+{\large\color{brand}\textbf{Thank you\;---\;Questions?}}
 \end{frame}
 
 \end{document}

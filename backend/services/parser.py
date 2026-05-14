@@ -24,6 +24,40 @@ def _parse_pdf(file_path: str) -> list[dict]:
     parsed = []
     filename = os.path.basename(file_path)
     for page_num, page in enumerate(doc, start=1):
+        # Extract tables first (PyMuPDF 1.23+) — preserves columnar structure for
+        # annual reports, financial statements, structured PDFs.
+        try:
+            finder = page.find_tables()
+            tables = getattr(finder, "tables", []) or []
+        except Exception:
+            tables = []
+        for table_idx, table in enumerate(tables, start=1):
+            try:
+                rows = table.extract() or []
+            except Exception:
+                continue
+            cleaned = [
+                [("" if c is None else str(c)).strip() for c in row]
+                for row in rows
+                if row and any((c or "") for c in row)
+            ]
+            if not cleaned:
+                continue
+            ncols = max(len(r) for r in cleaned)
+            cleaned = [r + [""] * (ncols - len(r)) for r in cleaned]
+            header = " | ".join(cleaned[0])
+            sep    = " | ".join(["---"] * ncols)
+            body   = "\n".join(" | ".join(r) for r in cleaned[1:])
+            table_text = (
+                f"[TABLE {table_idx} — page {page_num}]\n"
+                f"{header}\n{sep}\n{body}\n"
+                f"[/TABLE]"
+            ).strip()
+            parsed.append({
+                "text": table_text,
+                "metadata": {"category": "Table", "page_number": page_num, "filename": filename},
+            })
+
         text = page.get_text().strip()
         if text:
             parsed.append({

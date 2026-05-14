@@ -5,8 +5,14 @@ import re
 from rank_bm25 import BM25Okapi
 
 
+_TOKEN_RE = re.compile(
+    r"\$?\d[\d,.]*%?"          # $1,234.56  25%  2024  3.14
+    r"|\b\w+(?:-\w+)*\b"        # state-of-the-art  COVID-19  M3
+)
+
+
 def _tokenize(text: str) -> list[str]:
-    return re.findall(r"\b\w+\b", text.lower())
+    return _TOKEN_RE.findall(text.lower())
 
 
 def score_chunks(query: str, chunks) -> list[float]:

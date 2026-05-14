@@ -41,14 +41,31 @@ def _normalize_chunk_text(text: str) -> str:
 
 def chunk_document(file_path, doc_id: str = ""):
     raw = parse_document(file_path)
+
+    # Tables are kept atomic (never split); text is grouped per page and split.
+    table_docs: list[Document] = []
     grouped_pages: dict[int, list[str]] = defaultdict(list)
     page_sources: dict[int, str] = {}
     for elem in raw:
         meta = elem.get("metadata") or {}
         page = meta.get("page_number") or 1
         source = meta.get("filename") or ""
-        grouped_pages[page].append(elem["text"])
         page_sources[page] = source
+        if str(meta.get("category", "")).lower() == "table":
+            table_docs.append(
+                Document(
+                    page_content=elem["text"],
+                    metadata={
+                        "source": source,
+                        "page": page,
+                        "doc_id": doc_id,
+                        "section": "Table",
+                        "category": "Table",
+                    },
+                )
+            )
+        else:
+            grouped_pages[page].append(elem["text"])
 
     docs = []
     for page in sorted(grouped_pages):
@@ -70,8 +87,11 @@ def chunk_document(file_path, doc_id: str = ""):
         separators=["\n\n", "\n", ".", " ", ""],
     )
     chunks = splitter.split_documents(docs)
+    # Append atomic table chunks so financial/structured rows stay together.
+    chunks.extend(table_docs)
     for index, chunk in enumerate(chunks):
-        chunk.page_content = _normalize_chunk_text(chunk.page_content)
+        if chunk.metadata.get("category") != "Table":
+            chunk.page_content = _normalize_chunk_text(chunk.page_content)
         chunk.metadata["chunk_index"] = index
         # Ensure section key always exists (inherited from page doc; set "" if missing)
         chunk.metadata.setdefault("section", "")

@@ -1,11 +1,33 @@
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from langchain_community.llms import Ollama
 
 from ..config import LLM_MODEL_NAME, OLLAMA_BASE_URL
 from .query_classifier import QueryConfig, QueryType
+
+SYSTEM_PROMPT = """
+You are a highly accurate document-grounded AI assistant.
+
+You must answer questions ONLY from the provided document context.
+
+RULES:
+1. Use ONLY the retrieved context provided to you.
+2. Do NOT use outside knowledge.
+3. Do NOT make assumptions.
+4. Do NOT generate information that is not present in the context.
+5. If the answer is not clearly available in the context, reply:
+   "I could not find this information in the document."
+6. Keep answers concise, factual, and grounded.
+7. Do NOT provide generic explanations.
+8. Do NOT add extra details beyond the context.
+9. If multiple relevant points exist, summarize them clearly.
+10. Do NOT repeat previous questions or previous answers.
+
+Your goal is to provide accurate and document-faithful answers only.
+"""
 
 GREETINGS = {
     "hi", "hello", "hey", "hi!", "hello!", "hey!",
@@ -54,6 +76,42 @@ SUMMARY RULES (ENFORCE NOW):
 
 
 
+_STOP_TOKENS = [
+    "\n\nQuestion:",
+    "\n\nContext:",
+    "\nQuestion:",
+    "\nContext:",
+    "Explanation:",
+    "Note:",
+    "Disclaimer:",
+    "In conclusion",
+    "P.S.",
+]
+
+_GENERIC_OPENERS_RE = re.compile(
+    r"^\s*(?:"
+    r"based on (?:the )?(?:provided |retrieved )?(?:document|context|information|text)[,:\s\-—]+|"
+    r"according to (?:the )?(?:provided |retrieved )?(?:document|context|text|information)[,:\s\-—]+|"
+    r"the (?:document|context) (?:states|says|mentions|indicates|notes|provides|shows)[,:\s\-—]+|"
+    r"in (?:the )?(?:provided |retrieved )?(?:document|context|text)[,:\s\-—]+|"
+    r"from (?:the )?(?:provided |retrieved )?(?:document|context|text)[,:\s\-—]+|"
+    r"(?:answer|response)[,:\s\-—]+"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _clean_answer(text: str) -> str:
+    """Strip generic explanatory openers ('Based on the document, …') and trim."""
+    text = (text or "").strip()
+    # Strip nested openers if the model stacked them ("Based on the document, according to…")
+    prev = None
+    while text and text != prev:
+        prev = text
+        text = _GENERIC_OPENERS_RE.sub("", text).lstrip(" ,:.-—")
+    return text
+
+
 def _build_llm(max_tokens: int = 150) -> Ollama:
     return Ollama(
         model=LLM_MODEL_NAME,
@@ -61,6 +119,7 @@ def _build_llm(max_tokens: int = 150) -> Ollama:
         temperature=0,
         timeout=600,
         num_predict=max_tokens,
+        stop=_STOP_TOKENS,
     )
 
 
@@ -159,14 +218,7 @@ def generate_answer(
     context       = _build_context(docs)
     type_addendum = _TYPE_ADDENDUM.get(config.query_type, "")
 
-    prompt = f"""You are a strict document QA assistant. Answer ONLY from the retrieved context below.
-
-RULES:
-1. Use ONLY the retrieved context. Never use outside knowledge, assumptions, or training data.
-2. If the answer is not in the context, reply ONLY: "Not found in document."
-3. Stop immediately after answering. No elaboration, no follow-up sentences.
-4. Prefer exact document wording over paraphrase.
-5. Maximum 3-4 sentences unless a list or full explanation is explicitly requested.
+    prompt = f"""{SYSTEM_PROMPT}
 {type_addendum}
 Context:
 {context}
@@ -176,7 +228,7 @@ Question: {query}
 Answer:"""
 
     out = _build_llm(config.max_tokens).invoke(prompt)
-    return (out if isinstance(out, str) else str(out)).strip()
+    return _clean_answer(out if isinstance(out, str) else str(out))
 
 
 def generate_chat_answer(

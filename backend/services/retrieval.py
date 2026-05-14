@@ -10,6 +10,46 @@ from .vectordb import init_vector_store, reset_vector_store
 
 logger = logging.getLogger(__name__)
 
+_CROSS_ENCODER = None
+_CROSS_ENCODER_FAILED = False
+_CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+
+def _cross_encoder():
+    """Lazy-load cross-encoder for neural rerank. Falls back to None on failure."""
+    global _CROSS_ENCODER, _CROSS_ENCODER_FAILED
+    if _CROSS_ENCODER_FAILED:
+        return None
+    if _CROSS_ENCODER is None:
+        try:
+            from sentence_transformers import CrossEncoder
+            _CROSS_ENCODER = CrossEncoder(_CROSS_ENCODER_MODEL)
+        except Exception as e:
+            logger.warning("Cross-encoder unavailable, hybrid-only rerank: %s", e)
+            _CROSS_ENCODER_FAILED = True
+            return None
+    return _CROSS_ENCODER
+
+
+def _neural_rerank(query: str, candidates: list, k: int):
+    """Cross-encoder pass — picks the precise chunk over merely-related ones."""
+    if not candidates:
+        return candidates
+    ce = _cross_encoder()
+    if ce is None:
+        return candidates[:k]
+    try:
+        pairs = [(query, (doc.page_content or "")[:512]) for doc in candidates]
+        scores = ce.predict(pairs, show_progress_bar=False)
+    except Exception as e:
+        logger.warning("Cross-encoder predict failed: %s", e)
+        return candidates[:k]
+    ordered = [doc for _, doc in sorted(
+        zip(scores, candidates),
+        key=lambda pair: -float(pair[0]),
+    )]
+    return _dedupe_documents(ordered)[:k]
+
 STOPWORDS = {
     "a",
     "an",
@@ -323,8 +363,12 @@ def retrieve_context(query, k=None, doc_ids: list[str] | None = None, config=Non
         bm25_weight = config.bm25_weight
     else:
         k = k if k is not None else RETRIEVAL_K
-        # Fallback: infer weighting from query keywords when no config provided
-        bm25_weight = 0.7 if _is_numerical_query(query) else 0.5
+        # Fallback: infer weighting from query keywords when no config provided.
+        # Short keywords and numerical asks benefit from heavier lexical weight.
+        if _is_numerical_query(query) or _short_keyword(query):
+            bm25_weight = 0.75
+        else:
+            bm25_weight = 0.5
 
     chunks = load_chunks(doc_ids)
     if not chunks:
@@ -336,9 +380,17 @@ def retrieve_context(query, k=None, doc_ids: list[str] | None = None, config=Non
     bm25_scores = score_chunks(query, chunks)
     bm25_map = {_document_key(chunks[i]): bm25_scores[i] for i in range(len(chunks))}
 
+    # Broader candidate pools so the truly best chunk has a chance to surface.
     indexed = sorted(range(len(chunks)), key=lambda i: -bm25_scores[i])
-    lexical_candidates = [chunks[i] for i in indexed[: max(k * 3, 12)]]
+    lexical_candidates = [chunks[i] for i in indexed[: max(k * 6, 24)]]
+    vector_candidates  = _vector_candidates(query, min(len(chunks), max(k * 6, 28)), doc_ids)
 
-    vector_candidates = _vector_candidates(query, min(len(chunks), max(k * 4, 16)), doc_ids)
-
-    return _rerank(query, lexical_candidates + vector_candidates, k, bm25_map, bm25_weight)
+    # Hybrid rerank narrows the candidate pool; neural reranker selects the precise chunk.
+    hybrid_top = _rerank(
+        query,
+        lexical_candidates + vector_candidates,
+        max(k * 4, 12),
+        bm25_map,
+        bm25_weight,
+    )
+    return _neural_rerank(query, hybrid_top, k)
